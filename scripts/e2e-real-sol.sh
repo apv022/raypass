@@ -86,6 +86,9 @@ want 0 sol do raypass.generate --mode words --words 5 --json; has entropy_bits
 want 0 sol do raypass.match --url https://github.com/login --json; has "$GH"
 want 0 sol do raypass.fill --id "$GH" --url https://github.com/login --json; has E2E-pass-1
 want 1 sol do raypass.fill --id "$GH" --url https://evil.example/ --json; has forbidden
+want 0 sol do raypass.match --url http://github.com/login --json; has '"insecure":true'
+want 1 sol do raypass.fill --id "$GH" --url http://github.com/login --json; has 'insecure page'
+want 0 sol do raypass.fill --args "{\"id\":\"$GH\",\"url\":\"http://github.com/login\",\"allow_insecure\":true}" --json; has E2E-pass-1
 want 0 sol do raypass.save_login --url https://github.com/login --user alice --pass E2E-pass-2 --json; has '"created":false'
 want 0 sol do raypass.get --id "$GH" --json; has E2E-pass-2; has history
 want 0 sol do raypass.trash --ids "$NOTE" --dry-run --json; has dry_run
@@ -93,6 +96,9 @@ want 0 sol do raypass.trash --ids "$NOTE" --json
 want 0 sol do raypass.restore --ids "$NOTE" --json
 want 0 sol do raypass.trash --ids "$NOTE" --json
 want 0 sol do raypass.purge --all_trash --json; has '"purged":1'
+want 0 sol do raypass.purge --all_trash --dry-run --json; has '"ids":[]'
+want 0 sol do raypass.status --json; has '"orphaned_keyrings":[]'
+want 1 sol do raypass.recover --args - --json <<<'{"password":"no other vault"}'; has not_found
 want 0 sol do raypass.export --format encrypted --password 'e2e export pw' --json; has raypass_export
 want 2 sol do raypass.export --format encrypted --json
 want 0 sol do raypass.import --args - --json <<<'{"format":"chrome_csv","data":"name,url,username,password,note\nShop,https://shop.example,carol,E2E-pass-3,\n"}'
@@ -132,6 +138,17 @@ ok "native host: match, fill, refusal"
 echo "== the UI is served through the daemon"
 want 0 curl -fsS --noproxy '*' "http://raypass.localhost:$PA/"; has '<title>Raypass</title>'
 ok "UI at raypass.localhost:$PA"
+
+echo "== live lock state streams through the daemon (/lockstate)"
+use A
+curl -sN --noproxy '*' -H 'Sec-Fetch-Site: same-origin' "http://raypass.localhost:$PA/lockstate" >"$T/lockstate" 2>&1 &
+LS=$!
+waitfor 10 grep -q '"locked":false' "$T/lockstate" || die "no lock state from /lockstate: $(cat "$T/lockstate")"
+want 0 sol do raypass.lock --json
+waitfor 10 grep -q '"locked":true' "$T/lockstate" || die "the lock did not reach the open stream (is the daemon buffering?)"
+kill $LS 2>/dev/null || true
+want 0 sol do raypass.unlock --args - --json <<<"{\"password\":\"$PW2\"}"
+ok "/lockstate pushes the lock through Sol's UI proxy as it happens"
 
 echo "== feeds hold ciphertext only"
 for s in E2E-pass-1 E2E-pass-2 E2E-pass-3 E2E-note-secret E2E-seed-words 4111111111111111 GitHub "$PW" "$PW2"; do
