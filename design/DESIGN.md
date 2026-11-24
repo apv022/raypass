@@ -76,6 +76,10 @@ Keyring entry body (feed `keys`):
 ```
 The current keyring is the one with the greatest `stamp` (crdt.Stamp order: w, then c, then d).
 A password change appends a new keyring entry with the same `id`, a new salt, nonce and wrap.
+Since vk never changes, every keyring of a vault has the same `check`: a keyring with the vault's
+`id` whose `check` differs from that of the vault's first (smallest-stamp) keyring is ignored, so
+a broken or stray write can neither lock the person out nor make a device write entries under
+another key.
 If entries with **different** `id`s exist (two devices set up a vault while offline), the one
 with the smallest stamp wins and Raypass refuses to set up again; the other vault's items are
 reported by `raypass.status` as `orphaned` (not readable) – we never silently lose them: its
@@ -99,7 +103,12 @@ beyond any vault's number of entries.
 
 State is a single LWW `crdt.Map` folded from every op of every entry (any order, idempotent).
 Comparing stamps: `w`, then `c`, then `d` (string compare). A device must `Observe` every stamp
-it applies into its HLC clock so its next write wins over what it has seen.
+it applies into its HLC clock so its next write wins over what it has seen. So a far-future
+stamp (a device whose clock ran years ahead) does not freeze a field: every device's clock
+follows it and later writes still win. Stamps are not clamped to local time, because devices
+must converge on the same state whatever their clocks say. (Only a stamp whose counter is near
+2^32 could make an observing clock's counter wrap; ops are inside the AES-GCM ciphertext, so
+only a holder of the vault key, one of the person's own devices, could write one.)
 
 ### Encrypted export file
 
@@ -141,7 +150,12 @@ Changing `pass` of a login appends the previous one to `history`.
 - `raypass.setup` creates the keyring (refused if one exists), then the vault is unlocked.
 - `raypass.unlock` derives mk, unwraps vk, folds the vault. Wrong password: `unauthorized`.
   After 5 failures in a row each try waits 2^(n-5) s (cap 60 s) before answering.
-- Auto-lock after `s.auto_lock` minutes without any action call; `raypass.lock` at once. Lock
+- Auto-lock after `s.auto_lock` minutes without use; `raypass.lock` at once. Use is any action
+  that needs the vault, plus `setup`, `unlock`, `change_password` and `settings`; `status`,
+  `generate` and `lock` are not use, so a client that only shows the lock state never keeps the
+  vault open. `raypass.status` reports `locks_in`, the seconds left (0 when locked or never): a UI
+  arms one timer for that moment and asks `status` again then, and never locks the vault because
+  it was idle itself (another client may be using it). Lock
   zeroes vk and drops all decrypted state (the folded map is rebuilt on unlock).
 - While locked, actions that need the vault answer `{"error":{"code":"forbidden","message":"locked"}}`
   (HTTP 403, message exactly `locked`), so clients can show the unlock screen.
@@ -161,7 +175,7 @@ locked. Secrets are only in outputs of actions marked **reveals**; those are `ap
 
 | Action | Effect | Input | Output |
 |---|---|---|---|
-| `raypass.status` | read | – | `{"initialized","locked","items","trash","orphaned","auto_lock","clip_clear","kdf_iter"}` |
+| `raypass.status` | read | – | `{"initialized","locked","items","trash","orphaned","auto_lock","clip_clear","kdf_iter","locks_in"}` |
 | `raypass.setup` | write, agents | `password` | `{"ok":true}` (unlocked) |
 | `raypass.unlock` | write, agents | `password` | `{"ok":true}` |
 | `raypass.lock` | write | – | `{"ok":true}` |
@@ -206,6 +220,12 @@ Notes fixed by the Go implementation (the table above is authoritative for shape
   so cards, identities and wallets are written as notes with their fields as `name: value` lines
   in the `fields` column, and a login's extra URLs as `url: …` fields. Nothing is lost.
 - Exports contain the items not in the trash.
+- CSV export defuses spreadsheet formulas in the columns a web page can influence (through
+  `save_login`) or a hostile import can carry: `folder`, `name`, `login_uri` and `login_username`
+  get a leading `'` when they start with `=`, `+`, `-`, `@`, tab or CR (after any `'`s).
+  Passwords, TOTP, notes and fields are written unchanged (changing a secret would corrupt it in
+  the manager the file is for). Bitwarden CSV import removes that one `'`, so a Raypass round trip
+  is exact.
 
 ### URL matching
 
@@ -213,7 +233,9 @@ Normalize: lowercase scheme and host, default scheme `https`. Two URLs match whe
 **registrable domain** is equal (eTLD+1, using an embedded short list of multi-part public
 suffixes: `co.uk`, `com.au`, `co.jp`, `github.io`, … ; else last two labels), or for IP
 addresses and `localhost`, host and port are equal. Android apps are URLs `androidapp://<package>`
-and match exactly. Best-match ordering: exact host, then same registrable domain; then by name.
+and match exactly. Registrable-domain matching is for `http`/`https` only: a URL with any other
+scheme (`javascript://bank.com/`, `ftp://bank.com`) matches only the same scheme, host and port.
+Best-match ordering: exact host, then same registrable domain; then by name.
 
 ## Web UI (served by the app at `/`, opened at `http://raypass.localhost:7777/`)
 

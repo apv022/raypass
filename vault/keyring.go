@@ -164,8 +164,9 @@ type Keyrings struct {
 }
 
 // ChooseKeyring picks the vault and its current keyring (design/DESIGN.md): the vault is the id
-// of the keyring with the smallest stamp; its current keyring the one with the greatest stamp.
-// Invalid keyrings (minIter, sizes) are ignored.
+// of the keyring with the smallest stamp; its current keyring the one with the greatest stamp
+// among those with the same check (the same vault key) as that first one. Invalid keyrings
+// (minIter, sizes) are ignored.
 func ChooseKeyring(all []Keyring, minIter int) Keyrings {
 	var valid []Keyring
 	for _, kr := range all {
@@ -177,12 +178,18 @@ func ChooseKeyring(all []Keyring, minIter int) Keyrings {
 		return Keyrings{}
 	}
 	sort.SliceStable(valid, func(i, j int) bool { return valid[i].Stamp.Less(valid[j].Stamp) })
-	id := valid[0].ID
+	id, check := valid[0].ID, valid[0].Check
 	out := Keyrings{OK: true}
 	seen := map[string]bool{id: true}
 	for _, kr := range valid {
 		if kr.ID == id {
-			out.Current = kr // ascending: the last one wins
+			// The vault key never changes, so neither does its check: a later keyring of this
+			// vault that wraps another key (a broken client, or a stray write) is ignored.
+			// Unlocking with it would make this device write entries the other devices cannot
+			// read under the same vault id, and would lock the person out of their password.
+			if kr.Check == check {
+				out.Current = kr // ascending: the last one wins
+			}
 		} else if !seen[kr.ID] {
 			seen[kr.ID] = true
 			out.Others = append(out.Others, kr.ID)

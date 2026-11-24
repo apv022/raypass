@@ -73,6 +73,16 @@ func TestChooseKeyring(t *testing.T) {
 	if ChooseKeyring(nil, MinIter).OK {
 		t.Fatal("empty")
 	}
+	// A later keyring of the same vault wrapping a different key is not current: the vault key
+	// never changes, so its check must match the vault's first keyring.
+	other, err := WrapKeyring("q", seq(2, 32), KeyringParams{ID: a1.ID, Salt: seq(0, 16), Nonce: seq(0, 12), Iter: MinIter, Stamp: crdt.Stamp{Wall: 40, Device: "x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = ChooseKeyring([]Keyring{a1, a2, other, b1}, MinIter)
+	if got.Current.Stamp.Wall != 30 || got.Current.Check != a1.Check {
+		t.Fatalf("a keyring with another vault key became current: %+v", got.Current.Stamp)
+	}
 }
 
 func TestEntryRoundTripAndSplit(t *testing.T) {
