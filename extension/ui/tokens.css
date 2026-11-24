@@ -1,0 +1,90 @@
+/* A copy of the few Sol ui/kit design tokens (sol/ui/kit/tokens.css) the extension's pages use.
+   Copied, not loaded: an extension page cannot rely on a localhost server being up. Keep the
+   names identical to ui/kit's so the look stays the same. */
+:root {
+  color-scheme: light dark;
+  --canvas: #F5F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #F2F2F7;
+  --label: #1D1D1F;
+  --label-2: rgba(60, 60, 67, .60);
+  --label-3: rgba(60, 60, 67, .30);
+  --separator: rgba(60, 60, 67, .18);
+  --tint: #E8A100;
+  --tint-hover: #D39300;
+  --tint-pressed: #BE8400;
+  --tint-subtle: rgba(232, 161, 0, .16);
+  --tint-text: #9B6F0C;
+  --on-tint: #1D1D1F;
+  --focus-ring: rgba(232, 161, 0, .7);
+  --surface-hover: #E3E3E8;
+  --green: #34C759;
+  --red: #FF3B30;
+  --orange: #FF9500;
+  --red-subtle: rgba(255, 59, 48, .14);
+  --green-subtle: rgba(52, 199, 89, .16);
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --fs-title-2: 17px; --fs-headline: 13px; --fs-body: 13px; --fs-subhead: 12px; --fs-footnote: 11px;
+  --radius-control: 8px;
+  --radius-group: 12px;
+  --radius-pill: 999px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+  --control-h: 28px;
+  --row-h: 32px;
+  --hairline: 0.5px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .06), 0 1px 1px rgba(0, 0, 0, .04);
+  --shadow-float: 0 1px 2px rgba(0, 0, 0, .06), 0 8px 24px rgba(0, 0, 0, .12);
+  --ease: cubic-bezier(.25, .1, .25, 1);
+  --dur-press: 120ms;
+  --dur-fade: 200ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #000000;
+    --surface: #1C1C1E;
+    --surface-2: #2C2C2E;
+    --label: #F5F5F7;
+    --label-2: rgba(235, 235, 245, .60);
+    --label-3: rgba(235, 235, 245, .30);
+    --separator: rgba(84, 84, 88, .6);
+    --tint: #FFB524;
+    --tint-hover: #FFBC38;
+    --tint-pressed: #FFC24B;
+    --tint-subtle: rgba(255, 181, 36, .16);
+    --tint-text: #FBCD74;
+    --focus-ring: rgba(255, 181, 36, .7);
+    --surface-hover: #3A3A3C;
+    --green: #30D158;
+    --red: #FF453A;
+    --orange: #FF9F0A;
+    --red-subtle: rgba(255, 69, 58, .14);
+    --green-subtle: rgba(48, 209, 88, .16);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-float: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .5);
+  }
+}
+
+/* Shared controls of the popup and the options page. */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--canvas); color: var(--label); font: 400 var(--fs-body)/18px var(--font-ui); }
+button, input, select { font: inherit; color: inherit; }
+.btn { height: var(--control-h); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
+  background: var(--surface-2); color: var(--label); font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-press) var(--ease), transform var(--dur-press) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:active { transform: scale(.97); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--tint); color: var(--on-tint); }
+.btn.primary:hover { background: var(--tint-hover); }
+.btn.icon { width: var(--control-h); padding: 0; display: inline-grid; place-items: center; background: transparent; }
+.btn.icon:hover { background: var(--surface-2); }
+.btn.icon svg { width: 16px; height: 16px; }
+.field { height: var(--control-h); width: 100%; padding: 0 var(--space-2); border-radius: var(--radius-control);
+  border: var(--hairline) solid var(--separator); background: var(--surface); outline: none; }
+.field:focus { box-shadow: 0 0 0 3px var(--focus-ring); border-color: transparent; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.muted { color: var(--label-2); }
+.mono { font-family: var(--font-mono); }
+.group { background: var(--surface); border-radius: var(--radius-group); box-shadow: var(--shadow-1); overflow: hidden; }
+.hidden { display: none !important; }

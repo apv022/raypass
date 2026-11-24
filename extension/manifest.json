@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "Raypass",
+  "short_name": "Raypass",
+  "version": "0.1.0",
+  "description": "Fill and save logins from Raypass, the password manager that lives in Sol.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy0suEGvkbKHZP2wJ3ATHEyoMfnA/YRe/0dcSYtsA5AUrFRRsObUWuJUsAKMe4IbCxUZcOwN1lSleVhVOUsoanYD2L86HpmHCiEm6GX7iEWznESqhY/1vLLenbwOQ9eW1o/v/8jXva8iE7Vx7DPRd2DsKpaUf0p/ofPjWV//qC3sr4ClWE3hjmV5rtzutTsGth2R9cOPymDO1zMRNCB3sC7mMNZBhaZVAM8xWw1oKL3CaBNFXxVzzrZXyi9crhhDFo15Q/QbwR9YpNks2QcdUA1zFxJxMThGTAdBpfsGowUIhUIzE+FRm6v19ieT5yMUsaqxJsGQo8o6KOJ58BeFPPwIDAQAB",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "activeTab",
+    "contextMenus",
+    "storage",
+    "alarms",
+    "clipboardWrite",
+    "offscreen"
+  ],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["lib/forms.js", "content.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Raypass",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "fill": {
+      "suggested_key": { "default": "Ctrl+Shift+L", "mac": "Command+Shift+L" },
+      "description": "Fill the best Raypass login"
+    },
+    "_execute_action": {
+      "suggested_key": { "default": "Ctrl+Shift+Y", "mac": "Command+Shift+Y" },
+      "description": "Open Raypass"
+    }
+  }
+}

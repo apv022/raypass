@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Raypass extension</title>
+<link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <header>
+    <img src="../icons/icon-48.png" alt="" class="logo">
+    <div>
+      <h1>Raypass</h1>
+      <div class="muted">The browser half of Raypass. Your vault stays in Sol; this extension asks it, through a small program on this computer, for the logins of the page you are on.</div>
+    </div>
+  </header>
+
+  <section class="group card">
+    <h2>Connection</h2>
+    <div class="status" id="status"><span class="dot" id="dot"></span><span id="status-text">Not tested yet</span></div>
+    <dl class="facts hidden" id="facts">
+      <dt>Native host</dt><dd id="f-host"></dd>
+      <dt>sol</dt><dd class="mono" id="f-sol"></dd>
+      <dt>Vault</dt><dd id="f-vault"></dd>
+    </dl>
+    <div class="actions"><button class="btn primary" id="test">Test connection</button><button class="btn" id="web">Open Raypass</button></div>
+  </section>
+
+  <section class="group card">
+    <h2>Install the native host</h2>
+    <p class="muted">The extension cannot run programs on its own. <span class="mono">raypass-native</span> is the small program it talks to; it runs <span class="mono">sol do raypass.…</span> as you and passes the answer back. Install it once per computer:</p>
+    <ol>
+      <li>Build or download it: <code>make build</code> in the Raypass source puts it at <code>bin/raypass-native</code> (or <code>go install github.com/apv022/raypass/cmd/raypass-native@latest</code>).</li>
+      <li>Register it with your browsers:<pre class="mono" id="cmd"></pre></li>
+      <li>Restart the browser, then press <b>Test connection</b>.</li>
+    </ol>
+    <p class="muted">Sol must be running (<code>sol</code>) and the Raypass app installed in it. If your browser does not see Sol's data folder, start the install with <code>SOL_DIR=…</code> set: the host remembers it.</p>
+  </section>
+
+  <section class="group card">
+    <h2>Keyboard</h2>
+    <p class="muted"><b>Ctrl+Shift+L</b> fills the best login for the page; <b>Ctrl+Shift+Y</b> opens the popup. Change them in the browser's extension shortcuts page.</p>
+  </section>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>

@@ -359,6 +359,7 @@ document.addEventListener('keydown', (e) => {
   const t = e.target;
   const typing = /INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable;
   if (t.id === 'q') {
+    if (e.key === '/' && !t.value) { e.preventDefault(); return; } // already searching
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const id = step(e.key); if (id && phoneQ.matches) return; }
     else if (e.key === 'Enter') { e.preventDefault(); const first = visibleRows()[0]; if (first) { select(state.sel || first.id); $('rows').querySelector('[aria-selected="true"]')?.focus(); } }
     else if (e.key === 'Escape') { e.preventDefault(); if (t.value) { t.value = ''; state.query = ''; drawList(); } else t.blur(); }

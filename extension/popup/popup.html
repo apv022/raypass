@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Raypass</title>
+<link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<header class="top">
+  <img class="logo" src="../icons/icon-32.png" alt="">
+  <div class="brand">Raypass</div>
+  <div class="host muted" id="host"></div>
+  <span class="grow"></span>
+  <button class="btn icon" id="open-web" title="Open Raypass" aria-label="Open the Raypass web app">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h4v4M13 3 7.5 8.5M12 9.5V13H3V4h3.5"/></svg>
+  </button>
+  <button class="btn icon" id="lock" title="Lock" aria-label="Lock Raypass">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+  </button>
+</header>
+
+<main>
+  <!-- problem: host missing, Sol down, Raypass not installed or not set up -->
+  <section id="v-problem" class="view hidden">
+    <div class="empty">
+      <div class="empty-title" id="problem-title">Raypass is not reachable</div>
+      <div class="muted" id="problem-text"></div>
+      <div class="row-actions">
+        <button class="btn" id="problem-retry">Try again</button>
+        <button class="btn primary" id="problem-help">Set up</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- locked -->
+  <section id="v-unlock" class="view hidden">
+    <form class="unlock" id="unlock-form" autocomplete="off">
+      <img class="unlock-logo" src="../icons/icon-48.png" alt="">
+      <div class="empty-title">Raypass is locked</div>
+      <input class="field" type="password" id="master" placeholder="Master password" aria-label="Master password" autocomplete="current-password" spellcheck="false">
+      <div class="error" id="unlock-error" role="alert"></div>
+      <button class="btn primary wide" type="submit" id="unlock-btn">Unlock</button>
+    </form>
+  </section>
+
+  <!-- unlocked -->
+  <section id="v-main" class="view hidden">
+    <div class="save group hidden" id="save">
+      <div class="save-text"><b id="save-title"></b><div class="muted" id="save-user"></div></div>
+      <div class="row-actions">
+        <button class="btn" id="save-no">Not now</button>
+        <button class="btn primary" id="save-yes">Save</button>
+      </div>
+    </div>
+
+    <nav class="seg" role="tablist">
+      <button role="tab" data-tab="site" aria-selected="true">This site</button>
+      <button role="tab" data-tab="search" aria-selected="false">Search</button>
+      <button role="tab" data-tab="gen" aria-selected="false">Generator</button>
+    </nav>
+
+    <div class="tab" id="t-site">
+      <ul class="list group" id="matches"></ul>
+      <div class="empty-small muted hidden" id="matches-empty">No logins for this site.</div>
+    </div>
+
+    <div class="tab hidden" id="t-search">
+      <input class="field" type="search" id="q" placeholder="Search all items" aria-label="Search" spellcheck="false" autocomplete="off">
+      <ul class="list group" id="results"></ul>
+      <div class="empty-small muted hidden" id="results-empty">Nothing found.</div>
+    </div>
+
+    <div class="tab hidden" id="t-gen">
+      <div class="gen-out group">
+        <div class="mono gen-pass" id="gen-pass" aria-live="polite"></div>
+        <div class="gen-meta muted"><span id="gen-bits"></span><span class="grow"></span>
+          <button class="btn" id="gen-again">New</button>
+          <button class="btn" id="gen-copy">Copy</button>
+          <button class="btn primary" id="gen-fill" title="Put it in the page's new-password fields">Use</button>
+        </div>
+      </div>
+      <div class="gen-opts group">
+        <div class="opt"><span>Type</span>
+          <span class="seg small"><button data-mode="chars" aria-pressed="true">Characters</button><button data-mode="words" aria-pressed="false">Words</button></span>
+        </div>
+        <div class="opt chars"><label for="len">Length</label><input type="range" id="len" min="4" max="64" value="20"><span class="num" id="len-v">20</span></div>
+        <label class="opt chars"><span>A–Z</span><input type="checkbox" id="upper" checked></label>
+        <label class="opt chars"><span>a–z</span><input type="checkbox" id="lower" checked></label>
+        <label class="opt chars"><span>0–9</span><input type="checkbox" id="digits" checked></label>
+        <label class="opt chars"><span>!@#$</span><input type="checkbox" id="symbols" checked></label>
+        <label class="opt chars"><span>Avoid look-alikes</span><input type="checkbox" id="avoid"></label>
+        <div class="opt words hidden"><label for="nwords">Words</label><input type="range" id="nwords" min="3" max="12" value="5"><span class="num" id="nwords-v">5</span></div>
+        <label class="opt words hidden"><span>Separator</span><input class="field sep" id="sep" value="-" maxlength="3"></label>
+        <label class="opt words hidden"><span>Capitalize</span><input type="checkbox" id="cap"></label>
+        <label class="opt words hidden"><span>Add a number</span><input type="checkbox" id="number"></label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast hidden" id="toast" role="status"></div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>

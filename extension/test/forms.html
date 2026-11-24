@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Raypass form fixtures</title>
+<link rel="stylesheet" href="forms.css">
+</head>
+<body>
+<!-- Each section is one case for test/forms.test.js. Kept tricky on purpose. -->
+
+<section id="simple">
+  <form action="/login" method="post">
+    <label for="s-user">Username</label><input id="s-user" name="username" type="text" data-expect="user">
+    <label for="s-pass">Password</label><input id="s-pass" name="password" type="password" data-expect="pass">
+    <button type="submit">Sign in</button>
+  </form>
+</section>
+
+<section id="email-first">
+  <form>
+    <input type="email" name="email" placeholder="you@example.com" data-expect="user">
+    <input type="password" name="pw" data-expect="pass">
+    <input type="checkbox" name="remember">
+    <input type="submit" value="Log in">
+  </form>
+</section>
+
+<section id="search-and-login">
+  <form role="search"><input type="text" name="q" placeholder="Search"><button>Go</button></form>
+  <form>
+    <input type="text" name="login" data-expect="user">
+    <input type="password" name="secret" data-expect="pass">
+    <button>Continue</button>
+  </form>
+</section>
+
+<section id="honeypot">
+  <form>
+    <input type="text" name="email" class="hidden">
+    <input type="text" name="website" class="offscreen" tabindex="-1">
+    <input type="text" name="user_id" aria-label="User ID" data-expect="user">
+    <input type="password" name="pass" data-expect="pass">
+    <input type="password" name="pass2" class="invisible">
+    <button>Sign in</button>
+  </form>
+</section>
+
+<section id="signup">
+  <form>
+    <input type="text" name="first_name" placeholder="First name">
+    <input type="email" name="email" autocomplete="email" data-expect="user">
+    <input type="password" name="password" autocomplete="new-password">
+    <input type="password" name="password_confirm" autocomplete="new-password">
+    <button>Create account</button>
+  </form>
+</section>
+
+<section id="signup-unmarked">
+  <form>
+    <input type="text" name="username" data-expect="user">
+    <input type="password" name="password">
+    <input type="password" name="confirm">
+    <button>Register</button>
+  </form>
+</section>
+
+<section id="change">
+  <form>
+    <input type="text" name="username" autocomplete="username" value="alice" data-expect="user">
+    <input type="password" name="current" autocomplete="current-password" data-expect="pass">
+    <input type="password" name="new" autocomplete="new-password">
+    <input type="password" name="new2" autocomplete="new-password">
+    <button>Change password</button>
+  </form>
+</section>
+
+<section id="multistep">
+  <form>
+    <input type="text" name="identifier" autocomplete="username" placeholder="Email or phone" data-expect="user">
+    <button type="button">Next</button>
+  </form>
+</section>
+
+<section id="totp-ac">
+  <form><input type="text" name="code" autocomplete="one-time-code" inputmode="numeric" data-expect="totp"><button>Verify</button></form>
+</section>
+
+<section id="totp-name">
+  <form><input type="text" name="otp" maxlength="6" inputmode="numeric" data-expect="totp"><button>Verify</button></form>
+</section>
+
+<section id="split">
+  <form>
+    <input class="box" maxlength="1" inputmode="numeric" aria-label="Digit 1">
+    <input class="box" maxlength="1" inputmode="numeric" aria-label="Digit 2">
+    <input class="box" maxlength="1" inputmode="numeric" aria-label="Digit 3">
+    <input class="box" maxlength="1" inputmode="numeric" aria-label="Digit 4">
+    <input class="box" maxlength="1" inputmode="numeric" aria-label="Digit 5">
+    <input class="box" maxlength="1" inputmode="numeric" aria-label="Digit 6">
+    <button>Verify</button>
+  </form>
+</section>
+
+<section id="login-with-totp">
+  <form>
+    <input type="text" name="user" data-expect="user">
+    <input type="password" name="password" data-expect="pass">
+    <input type="text" name="mfa_code" placeholder="2FA code" maxlength="6" data-expect="totp">
+    <button>Sign in</button>
+  </form>
+</section>
+
+<section id="formless">
+  <div class="card">
+    <div><input type="text" placeholder="Email or phone" data-expect="user"></div>
+    <div><input type="password" placeholder="Password" data-expect="pass"></div>
+    <div role="button" tabindex="0">Log in</div>
+  </div>
+</section>
+
+<section id="newsletter">
+  <form><p>Subscribe to our newsletter</p><input type="email" name="email" placeholder="Email"><button>Subscribe</button></form>
+</section>
+
+<section id="contact">
+  <form>
+    <input type="text" name="name" placeholder="Your name">
+    <input type="email" name="email" placeholder="Email">
+    <textarea name="message"></textarea>
+    <button>Send</button>
+  </form>
+</section>
+
+<section id="dead">
+  <form>
+    <input type="password" name="disabled" disabled>
+    <input type="password" name="tiny" class="tiny">
+    <input type="password" name="gone" hidden>
+    <button>x</button>
+  </form>
+</section>
+
+<section id="dynamic">
+  <form id="dynamic-form"><input type="email" name="email" autocomplete="username" data-expect="user"><button>Next</button></form>
+</section>
+
+<section id="react">
+  <form><input type="text" id="react-user" name="username"><input type="password" id="react-pass" name="password"><button>Go</button></form>
+</section>
+</body>
+</html>

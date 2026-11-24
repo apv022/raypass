@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs the pure-Java tests on the JDK (no device, no Android SDK): compiles src/app/raypass/core
+# (which must not import android.*) and test/, then runs app.raypass.test.Main against the shared
+# vectors in ../testdata/vectors.json and the word list in ../gen/wordlist.txt.
+set -euo pipefail
+cd "$(dirname "$0")"
+OUT=build/test-classes
+rm -rf "$OUT" && mkdir -p "$OUT"
+if grep -rln '^import android\.' src/app/raypass/core; then
+  echo "src/app/raypass/core must not depend on android.*" >&2; exit 1
+fi
+unset _JAVA_OPTIONS JAVA_TOOL_OPTIONS 2>/dev/null || true
+javac -Xlint:all -Xlint:-options -Xlint:-serial -Xlint:-rawtypes -Xlint:-unchecked --release 8 -d "$OUT" \
+  $(find src/app/raypass/core test -name '*.java')
+java -cp "$OUT" app.raypass.test.Main ..

@@ -1,0 +1,9 @@
+/* Styles of the detector fixture (no inline styles: the test server's CSP forbids them). */
+body { font: 14px system-ui, sans-serif; margin: 8px; }
+section { border: 1px solid #ccc; margin: 8px 0; padding: 8px; }
+input:not([hidden]) { display: block; margin: 4px 0; width: 220px; height: 24px; }
+input.box:not([hidden]) { display: inline-block; width: 24px; }
+.hidden { display: none !important; }
+.offscreen { position: absolute; left: -10000px; }
+.invisible { visibility: hidden; }
+input.tiny { width: 1px; height: 1px; padding: 0; border: 0; }
