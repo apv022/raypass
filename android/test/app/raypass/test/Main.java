@@ -7,9 +7,9 @@ public final class Main {
         JsonTest.register();
         CryptoTest.register(root);
         CrdtTest.register();
-        VaultTest.register();
         TotpTest.register();
-        UrlMatchTest.register();
+        UrlMatchTest.register(root);
+        VaultTest.register();
         FormFieldsTest.register();
         GeneratorTest.register(root);
         System.exit(T.runAll() == 0 ? 0 : 1);

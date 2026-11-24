@@ -8,15 +8,17 @@ import java.util.Set;
 /**
  * URL matching of DESIGN.md "URL matching": two URLs match when their registrable domains
  * (eTLD+1 with a short embedded list of multi-part public suffixes, else the last two labels) are
- * equal; IP addresses and localhost need the same host and port; Android apps are
- * {@code androidapp://<package>} and match exactly. Ranking: exact host 0, same registrable
- * domain 1, no match -1. Pure Java so the autofill matching is tested on the JDK.
+ * equal; IP addresses, localhost and single-label hosts need the same host and port; Android apps
+ * are {@code androidapp://<package>} and match exactly. Ranking: same host (www. ignored) 0, same
+ * registrable domain 1, no match -1. Mirrors the Go app's urlmatch package rule for rule, with
+ * its suffix list loaded from urlmatch/suffixes.txt ({@link #loadSuffixes}). Pure Java so the
+ * autofill matching is tested on the JDK.
  */
 public final class UrlMatch {
     private UrlMatch() {}
 
     /** Multi-part public suffixes we know (kept in step with the Go app's urlmatch list). */
-    static final Set<String> SUFFIXES = new HashSet<>(Arrays.asList(
+    static final Set<String> SUFFIXES /* built-in fallback until loadSuffixes */ = new HashSet<>(Arrays.asList(
             "co.uk", "org.uk", "me.uk", "ac.uk", "gov.uk", "ltd.uk", "plc.uk", "net.uk", "nhs.uk", "sch.uk",
             "com.au", "net.au", "org.au", "edu.au", "gov.au", "asn.au", "id.au",
             "co.nz", "net.nz", "org.nz", "govt.nz", "ac.nz",
@@ -50,13 +52,26 @@ public final class UrlMatch {
             "s3.amazonaws.com", "glitch.me", "fly.dev", "onrender.com", "repl.co", "ngrok.io", "ngrok-free.app",
             "duckdns.org", "dyndns.org", "no-ip.org", "myshopify.com", "wordpress.com", "tumblr.com"));
 
-    /** A parsed URL: scheme, host (lowercase, no brackets), port ("" for default). */
+    /** Replaces the suffix list with the Go app's urlmatch/suffixes.txt ("#" comments, whitespace separated). */
+    public static synchronized void loadSuffixes(java.io.InputStream in) throws java.io.IOException {
+        java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+        Set<String> out = new HashSet<>();
+        for (String line; (line = r.readLine()) != null; ) {
+            if (line.trim().startsWith("#")) continue;
+            for (String w : line.trim().split("\\s+")) if (!w.isEmpty()) out.add(w.toLowerCase(Locale.ROOT));
+        }
+        if (out.isEmpty()) throw new java.io.IOException("empty suffix list");
+        SUFFIXES.clear();
+        SUFFIXES.addAll(out);
+    }
+
+    /** A parsed URL: scheme, host (lowercase, no brackets; the package for androidapp), port (scheme default filled in). */
     public static final class Url {
         /** Lowercase scheme. */
         public final String scheme;
         /** Lowercase host, or the package for androidapp. */
         public final String host;
-        /** Port or "". */
+        /** Port as given, or 443 / 80 for https / http, else "". */
         public final String port;
 
         Url(String scheme, String host, String port) {
@@ -66,17 +81,16 @@ public final class UrlMatch {
         }
     }
 
-    /** Parses u with the default scheme https; null when there is no host. */
+    /** Parses u like the Go app's urlmatch.Parse (default scheme https); null when there is no host. */
     public static Url parse(String u) {
         if (u == null) return null;
         String s = u.trim();
         if (s.isEmpty()) return null;
-        String scheme = "https";
+        if (!s.contains("://")) s = "https://" + s;
         int i = s.indexOf("://");
-        if (i > 0 && s.substring(0, i).matches("[A-Za-z][A-Za-z0-9+.-]*")) {
-            scheme = s.substring(0, i).toLowerCase(Locale.ROOT);
-            s = s.substring(i + 3);
-        }
+        if (i <= 0 || !s.substring(0, i).matches("[A-Za-z][A-Za-z0-9+.-]*")) return null;
+        String scheme = s.substring(0, i).toLowerCase(Locale.ROOT);
+        s = s.substring(i + 3);
         int end = s.length();
         for (char c : new char[]{'/', '?', '#'}) {
             int j = s.indexOf(c);
@@ -85,13 +99,29 @@ public final class UrlMatch {
         String auth = s.substring(0, end);
         int at = auth.lastIndexOf('@');
         if (at >= 0) auth = auth.substring(at + 1);
-        if (scheme.equals("androidapp")) return auth.isEmpty() ? null : new Url(scheme, auth, "");
+        if (scheme.equals("androidapp")) {
+            // Go: host + path without a trailing slash, lowercased; no query or fragment allowed.
+            String rest = s.substring(end);
+            if (rest.startsWith("/")) {
+                String path = rest;
+                if (path.indexOf('?') >= 0 || path.indexOf('#') >= 0) return null;
+                if (path.endsWith("/")) path = path.substring(0, path.length() - 1);
+                if (path.contains("/")) return null;
+            } else if (!rest.isEmpty()) {
+                return null;
+            }
+            String pkg = auth.toLowerCase(Locale.ROOT);
+            return pkg.isEmpty() ? null : new Url(scheme, pkg, "");
+        }
         String host = auth, port = "";
         if (auth.startsWith("[")) {
             int rb = auth.indexOf(']');
             if (rb < 0) return null;
             host = auth.substring(1, rb);
-            if (auth.length() > rb + 1 && auth.charAt(rb + 1) == ':') port = auth.substring(rb + 2);
+            if (auth.length() > rb + 1) {
+                if (auth.charAt(rb + 1) != ':') return null;
+                port = auth.substring(rb + 2);
+            }
         } else {
             int c = auth.lastIndexOf(':');
             if (c >= 0) {
@@ -99,42 +129,49 @@ public final class UrlMatch {
                 port = auth.substring(c + 1);
             }
         }
+        if (!port.matches("[0-9]*")) return null;
         host = host.toLowerCase(Locale.ROOT);
-        while (host.endsWith(".")) host = host.substring(0, host.length() - 1);
+        if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
         if (host.isEmpty()) return null;
-        if ((scheme.equals("https") && port.equals("443")) || (scheme.equals("http") && port.equals("80"))) port = "";
+        if (port.isEmpty()) port = scheme.equals("https") ? "443" : scheme.equals("http") ? "80" : "";
         return new Url(scheme, host, port);
     }
 
-    /** Reports whether host is an IPv4/IPv6 literal or localhost. */
+    /** IP literal, localhost, *.localhost, or a single-label host: matched by host and port only. */
     public static boolean isIpOrLocal(String host) {
         if (host.equals("localhost") || host.endsWith(".localhost")) return true;
         if (host.contains(":")) return true; // IPv6
-        return host.matches("\\d{1,3}(\\.\\d{1,3}){3}");
+        if (host.matches("\\d{1,3}(\\.\\d{1,3}){3}")) return true;
+        return !host.contains(".");
     }
 
-    /** The registrable domain (eTLD+1) of a hostname; the host itself if it has fewer labels. */
+    /** The registrable domain: the longest known suffix plus one label, else the last two labels. */
     public static String registrable(String host) {
+        host = host.toLowerCase(Locale.ROOT);
+        if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
         if (isIpOrLocal(host)) return host;
         String[] l = host.split("\\.");
-        if (l.length <= 2) return host;
-        String last2 = l[l.length - 2] + "." + l[l.length - 1];
-        if (SUFFIXES.contains(last2)) return l[l.length - 3] + "." + last2;
-        if (l.length >= 4) {
-            String last3 = l[l.length - 3] + "." + last2;
-            if (SUFFIXES.contains(last3)) return l[l.length - 4] + "." + last3;
+        for (int i = 0; i < l.length - 1; i++) {
+            StringBuilder suf = new StringBuilder();
+            for (int k = i + 1; k < l.length; k++) suf.append(k > i + 1 ? "." : "").append(l[k]);
+            if (SUFFIXES.contains(suf.toString())) {
+                return l[i] + "." + suf;
+            }
         }
-        return last2;
+        if (l.length <= 2) return host;
+        return l[l.length - 2] + "." + l[l.length - 1];
     }
 
-    /** 0: same host; 1: same registrable domain; -1: no match. */
+    private static String noWww(String h) { return h.startsWith("www.") ? h.substring(4) : h; }
+
+    /** 0: same host (www. ignored); 1: same registrable domain; -1: no match (Go's Match 2/1/0). */
     public static int rank(String itemUrl, String target) {
         Url a = parse(itemUrl), b = parse(target);
         if (a == null || b == null) return -1;
         boolean aa = a.scheme.equals("androidapp"), ba = b.scheme.equals("androidapp");
         if (aa || ba) return aa && ba && a.host.equals(b.host) ? 0 : -1;
         if (isIpOrLocal(a.host) || isIpOrLocal(b.host)) return a.host.equals(b.host) && a.port.equals(b.port) ? 0 : -1;
-        if (a.host.equals(b.host)) return 0;
+        if (a.host.equals(b.host) || noWww(a.host).equals(noWww(b.host))) return 0;
         return registrable(a.host).equals(registrable(b.host)) ? 1 : -1;
     }
 
@@ -147,7 +184,8 @@ public final class UrlMatch {
         if (p == null) return u.trim();
         if (p.scheme.equals("androidapp")) return "androidapp://" + p.host;
         String h = p.host.contains(":") ? "[" + p.host + "]" : p.host;
-        return p.scheme + "://" + h + (p.port.isEmpty() ? "" : ":" + p.port);
+        boolean dflt = p.port.isEmpty() || (p.scheme.equals("https") && p.port.equals("443")) || (p.scheme.equals("http") && p.port.equals("80"));
+        return p.scheme + "://" + h + (dflt ? "" : ":" + p.port);
     }
 
     /** A name for a new login: the host without "www.", or the app's package. */

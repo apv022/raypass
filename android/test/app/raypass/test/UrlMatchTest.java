@@ -6,7 +6,34 @@ import app.raypass.core.UrlMatch;
 
 /** URL matching rules of DESIGN.md. */
 final class UrlMatchTest {
-    static void register() {
+    static void register(final String root) {
+        test("url: the shared suffix list loads (../urlmatch/suffixes.txt)", new T.Case() { public void run() throws Exception {
+            try (java.io.InputStream in = new java.io.FileInputStream(java.nio.file.Paths.get(root, "urlmatch", "suffixes.txt").toFile())) {
+                UrlMatch.loadSuffixes(in);
+            }
+            eq("bucket.s3.amazonaws.com", UrlMatch.registrable("bucket.s3.amazonaws.com"), "s3 is a suffix in the shared list");
+        }});
+        test("url: the Go urlmatch test table", new T.Case() { public void run() {
+            String[][] parse = {{"GitHub.com", "https://github.com"}, {"HTTP://Example.COM.:8080/x?y=1", "http://example.com:8080"},
+                    {"https://[::1]:9000/", "https://[::1]:9000"}, {"androidapp://com.Example.App", "androidapp://com.example.app"},
+                    {" https://a.b.co.uk/login ", "https://a.b.co.uk"}};
+            for (String[] c : parse) eq(c[1], UrlMatch.canonical(c[0]), "parse " + c[0]);
+            String[][] reg = {{"github.com", "github.com"}, {"gist.github.com", "github.com"}, {"a.b.example.co.uk", "example.co.uk"},
+                    {"alice.github.io", "alice.github.io"}, {"x.alice.github.io", "alice.github.io"}, {"localhost", "localhost"},
+                    {"192.168.1.1", "192.168.1.1"}, {"co.uk", "co.uk"}, {"nas", "nas"}};
+            for (String[] c : reg) eq(c[1], UrlMatch.registrable(c[0]), "registrable " + c[0]);
+            Object[][] m = {{"https://github.com", "https://github.com/login", 2}, {"github.com", "https://www.github.com/", 2},
+                    {"https://github.com", "https://gist.github.com", 1}, {"https://github.com", "http://github.com", 2},
+                    {"https://github.com", "https://github.com.evil.com", 0}, {"https://evilgithub.com", "https://github.com", 0},
+                    {"https://alice.github.io", "https://bob.github.io", 0}, {"https://shop.example.co.uk", "https://login.example.co.uk", 1},
+                    {"https://a.co.uk", "https://b.co.uk", 0}, {"http://192.168.1.1:8080", "http://192.168.1.1:8080/admin", 2},
+                    {"http://192.168.1.1:8080", "http://192.168.1.1:8081", 0}, {"http://localhost:3000", "http://localhost:3000/x", 2},
+                    {"http://localhost:3000", "http://localhost:4000", 0}, {"androidapp://com.example.app", "androidapp://com.example.app", 2},
+                    {"androidapp://com.example.app", "androidapp://com.example.app2", 0}, {"androidapp://com.example", "https://example.com", 0},
+                    {"", "https://x.com", 0}};
+            for (Object[] c : m) eq(2 - (Integer) c[2], UrlMatch.rank((String) c[0], (String) c[1]) == -1 ? 2 : UrlMatch.rank((String) c[0], (String) c[1]),
+                    "match " + c[0] + " vs " + c[1]);
+        }});
         test("autofill target: web domain only from known browsers", new T.Case() { public void run() {
             eq("https://github.com", app.raypass.core.AutofillTarget.url("com.android.chrome", "GitHub.com", null), "browser");
             eq("http://intranet.local", app.raypass.core.AutofillTarget.url("org.mozilla.firefox", "intranet.local", "http"), "scheme");

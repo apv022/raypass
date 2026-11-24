@@ -24,11 +24,12 @@ framework and `javax.crypto` only: no Gradle, no AndroidX, no third-party code.
   wallets, trash), detail with copy (marked sensitive, cleared after `s.clip_clear` seconds),
   show/hide, live TOTP (RFC 6238, SHA1/256/512, Steam), password history; add/edit every type
   with custom fields; trash, restore, delete forever. `FLAG_SECURE` on every window.
-- **Generator**: characters or EFF words (`../gen/wordlist.txt`, packed as `res/raw/wordlist`),
+- **Generator**: characters or EFF words (`../gen/wordlist.txt`, the EFF large list, packed as `res/raw/wordlist`),
   entropy computed like the Go app.
 - **Autofill** (`RaypassAutofillService`): finds username/password fields from autofill hints,
   HTML attributes, input types and id/hint words; offers logins matching
-  `androidapp://<package>`, or the web domain reported by a known browser (any other app could
+  `androidapp://<package>`, or the web domain reported by a known browser (URL rules and the
+  suffix list `../urlmatch/suffixes.txt` shared with the Go app) (any other app could
   claim any domain, so only browsers are believed); "Unlock Raypass" when locked; saves new or
   changed logins (same user and domain updates the password and keeps the old one in history).
 

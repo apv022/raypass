@@ -7,8 +7,8 @@
 #   RELEASE=1 android/build.sh   build/raypass-release.apk signed with RAYPASS_KEYSTORE / RAYPASS_KEY_ALIAS /
 #                          RAYPASS_KEYSTORE_PASS (environment only, never argv)
 #
-# The word list for the passphrase generator is ../gen/wordlist.txt (shared with the Go app),
-# packed as res/raw/wordlist. The pure-Java tests are android/test.sh.
+# Shared with the Go app and packed as raw resources: ../gen/wordlist.txt (passphrases) and
+# ../urlmatch/suffixes.txt (registrable domains). The pure-Java tests are android/test.sh.
 set -euo pipefail
 cd "$(dirname "$0")"
 HERE=$PWD
@@ -22,7 +22,7 @@ jar=$TC/android.jar
 unset _JAVA_OPTIONS JAVA_TOOL_OPTIONS 2>/dev/null || true
 for t in aapt2 zipalign apksigner javac keytool; do command -v $t >/dev/null || { echo "missing $t (run android/toolchain.sh)" >&2; exit 1; }; done
 [ -f "$jar" ] || { echo "no $jar (run android/toolchain.sh)" >&2; exit 1; }
-[ -f ../gen/wordlist.txt ] || { echo "missing ../gen/wordlist.txt" >&2; exit 1; }
+for f in ../gen/wordlist.txt ../urlmatch/suffixes.txt; do [ -f $f ] || { echo "missing $f" >&2; exit 1; }; done
 if [ -n "${RELEASE:-}" ]; then
   for v in RAYPASS_KEYSTORE RAYPASS_KEY_ALIAS RAYPASS_KEYSTORE_PASS; do
     [ -n "${!v:-}" ] || { echo "RELEASE=1 needs $v" >&2; exit 1; }
@@ -39,9 +39,11 @@ fi
 
 rm -rf "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/res-extra" "$APK" && mkdir -p "$OUT/gen" "$OUT/classes" "$OUT/dex" "$OUT/res-extra/raw"
 cp ../gen/wordlist.txt "$OUT/res-extra/raw/wordlist.txt"
+cp ../urlmatch/suffixes.txt "$OUT/res-extra/raw/suffixes.txt"
 
 aapt2 compile --dir res -o "$OUT/res.zip"
 aapt2 compile "$OUT/res-extra/raw/wordlist.txt" -o "$OUT/res-extra/"
+aapt2 compile "$OUT/res-extra/raw/suffixes.txt" -o "$OUT/res-extra/"
 aapt2 link -o "$OUT/unsigned.apk" -I "$jar" --manifest AndroidManifest.xml --java "$OUT/gen" \
   --min-sdk-version $MIN_SDK --target-sdk-version $TARGET_SDK --version-name "$VERSION_NAME" --version-code "$VERSION_CODE" \
   "$OUT/res.zip" "$OUT"/res-extra/*.flat
