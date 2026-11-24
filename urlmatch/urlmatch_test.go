@@ -30,6 +30,9 @@ func TestRegistrable(t *testing.T) {
 		"alice.github.io":         "alice.github.io",
 		"x.alice.github.io":       "alice.github.io",
 		"bucket.s3.amazonaws.com": "bucket.s3.amazonaws.com",
+		"x.alice.netlify.app":     "alice.netlify.app",
+		"a.b.up.railway.app":      "b.up.railway.app",
+		"docs.readthedocs.io":     "docs.readthedocs.io",
 		"localhost":               "localhost",
 		"192.168.1.1":             "192.168.1.1",
 		"co.uk":                   "co.uk",
@@ -76,6 +79,10 @@ func TestMatch(t *testing.T) {
 		{"https://bank.com", "https://evil.com@bank.com/", 2},
 		{"https://bank.com", "HTTPS://BANK.COM./login", 2},
 		{"https://bank.com", "https://bank.com.evil.com.", 0},
+		// Private suffixes: every customer of a host is a different site.
+		{"https://alice.herokuapp.com", "https://bob.herokuapp.com", 0},
+		{"https://shop.myshopify.com", "https://admin.shop.myshopify.com", 1},
+		{"https://a.up.railway.app", "https://b.up.railway.app", 0},
 	}
 	for _, c := range cases {
 		if got := Match(c.saved, c.page); got != c.want {

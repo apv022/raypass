@@ -12,25 +12,30 @@
   // (cmd/extpack's test keeps them equal). Anything not listed has a one-label suffix, so the
   // registrable domain is the last two labels.
   const MULTI = new Set([
-    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'ltd.uk', 'plc.uk', 'sch.uk', 'nhs.uk',
-    'police.uk', 'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au', 'co.nz',
-    'org.nz', 'net.nz', 'govt.nz', 'ac.nz', 'co.jp', 'ne.jp', 'or.jp', 'ac.jp', 'go.jp', 'ad.jp',
-    'ed.jp', 'gr.jp', 'lg.jp', 'co.kr', 'or.kr', 'ne.kr', 'go.kr', 'ac.kr', 'co.in', 'net.in',
-    'org.in', 'firm.in', 'gen.in', 'ind.in', 'ac.in', 'gov.in', 'com.br', 'net.br', 'org.br',
-    'gov.br', 'edu.br', 'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn', 'com.tw', 'org.tw',
-    'net.tw', 'edu.tw', 'gov.tw', 'com.hk', 'org.hk', 'net.hk', 'edu.hk', 'gov.hk', 'com.sg',
-    'org.sg', 'net.sg', 'edu.sg', 'gov.sg', 'com.my', 'org.my', 'net.my', 'com.mx', 'org.mx',
-    'gob.mx', 'edu.mx', 'com.ar', 'org.ar', 'gob.ar', 'com.tr', 'org.tr', 'gov.tr', 'edu.tr',
-    'co.za', 'org.za', 'gov.za', 'co.il', 'org.il', 'ac.il', 'gov.il', 'com.ua', 'org.ua', 'net.ua',
-    'co.id', 'or.id', 'ac.id', 'go.id', 'com.ph', 'org.ph', 'com.vn', 'net.vn', 'com.pk', 'org.pk',
-    'com.ng', 'org.ng', 'com.eg', 'com.sa', 'co.th', 'in.th', 'ac.th', 'go.th', 'com.co', 'com.pe',
-    'com.ve', 'co.at', 'or.at', 'com.pl', 'net.pl', 'org.pl', 'com.ru', 'com.es', 'org.es',
-    'com.gr', 'com.cy', 'com.mt', 'co.ke', 'com.bd', 'com.np', 'com.lk', 'github.io', 'gitlab.io',
-    'herokuapp.com', 'appspot.com', 'blogspot.com', 'netlify.app', 'vercel.app', 'pages.dev',
-    'workers.dev', 'web.app', 'firebaseapp.com', 'azurewebsites.net', 'cloudfront.net',
-    's3.amazonaws.com', 'fly.dev', 'onrender.com', 'glitch.me', 'repl.co', 'ngrok.io',
-    'ngrok-free.app', 'myshopify.com', 'wordpress.com', 'tumblr.com', 'substack.com',
-    'sharepoint.com', 'ddns.net', 'duckdns.org', 'no-ip.org', 'dyndns.org',
+    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'ltd.uk', 'plc.uk', 'sch.uk',
+    'nhs.uk', 'police.uk', 'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au',
+    'co.nz', 'org.nz', 'net.nz', 'govt.nz', 'ac.nz', 'co.jp', 'ne.jp', 'or.jp', 'ac.jp',
+    'go.jp', 'ad.jp', 'ed.jp', 'gr.jp', 'lg.jp', 'co.kr', 'or.kr', 'ne.kr', 'go.kr', 'ac.kr',
+    'co.in', 'net.in', 'org.in', 'firm.in', 'gen.in', 'ind.in', 'ac.in', 'gov.in', 'com.br',
+    'net.br', 'org.br', 'gov.br', 'edu.br', 'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn',
+    'com.tw', 'org.tw', 'net.tw', 'edu.tw', 'gov.tw', 'com.hk', 'org.hk', 'net.hk', 'edu.hk',
+    'gov.hk', 'com.sg', 'org.sg', 'net.sg', 'edu.sg', 'gov.sg', 'com.my', 'org.my', 'net.my',
+    'com.mx', 'org.mx', 'gob.mx', 'edu.mx', 'com.ar', 'org.ar', 'gob.ar', 'com.tr', 'org.tr',
+    'gov.tr', 'edu.tr', 'co.za', 'org.za', 'gov.za', 'co.il', 'org.il', 'ac.il', 'gov.il',
+    'com.ua', 'org.ua', 'net.ua', 'co.id', 'or.id', 'ac.id', 'go.id', 'com.ph', 'org.ph',
+    'com.vn', 'net.vn', 'com.pk', 'org.pk', 'com.ng', 'org.ng', 'com.eg', 'com.sa', 'co.th',
+    'in.th', 'ac.th', 'go.th', 'com.co', 'com.pe', 'com.ve', 'co.at', 'or.at', 'com.pl',
+    'net.pl', 'org.pl', 'com.ru', 'com.es', 'org.es', 'com.gr', 'com.cy', 'com.mt', 'co.ke',
+    'com.bd', 'com.np', 'com.lk', 'github.io', 'gitlab.io', 'bitbucket.io', 'codeberg.page',
+    'readthedocs.io', 'gitbook.io', 'herokuapp.com', 'appspot.com', 'blogspot.com',
+    'pythonanywhere.com', 'netlify.app', 'vercel.app', 'now.sh', 'pages.dev', 'workers.dev',
+    'trycloudflare.com', 'web.app', 'firebaseapp.com', 'azurewebsites.net',
+    'azurestaticapps.net', 'cloudapp.net', 'cloudfront.net', 's3.amazonaws.com',
+    'cloudfunctions.net', 'fly.dev', 'onrender.com', 'glitch.me', 'repl.co', 'surge.sh',
+    'deno.dev', 'up.railway.app', 'hf.space', 'streamlit.app', 'ngrok.io', 'ngrok.app',
+    'ngrok-free.app', 'loca.lt', 'myshopify.com', 'wordpress.com', 'tumblr.com', 'substack.com',
+    'webflow.io', 'neocities.org', '000webhostapp.com', 'sharepoint.com', 'ddns.net',
+    'duckdns.org', 'no-ip.org', 'dyndns.org',
   ]);
 
   const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -92,11 +97,20 @@
     const pa = parse(a), pb = parse(b);
     if (!pa || !pb) return 0;
     if ((pa.scheme === 'androidapp') !== (pb.scheme === 'androidapp')) return 0;
+    // Registrable-domain matching is for web pages only: javascript://bank.com/ or
+    // ftp://bank.com has bank.com as its host but is not the bank's page. Anything not http(s)
+    // on either side matches only the same scheme, host and port.
+    if (pa.scheme !== 'androidapp' && (!web(pa.scheme) || !web(pb.scheme))) {
+      return pa.scheme === pb.scheme && pa.host === pb.host && pa.port === pb.port ? 2 : 0;
+    }
     const ka = siteKey(pa);
     if (!ka || ka !== siteKey(pb)) return 0;
     const bare = (h) => h.replace(/^www\./, '');
     return pa.host === pb.host || bare(pa.host) === bare(pb.host) ? 2 : 1;
   }
+
+  /** The schemes of web pages, which match by registrable domain. */
+  function web(scheme) { return scheme === 'http' || scheme === 'https'; }
 
   /** Whether item URL a matches page URL b. */
   function matches(a, b) { return rank(a, b) > 0; }

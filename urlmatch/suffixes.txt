@@ -42,12 +42,14 @@ co.ke
 com.bd
 com.np
 com.lk
-github.io gitlab.io
-herokuapp.com appspot.com blogspot.com
-netlify.app vercel.app pages.dev workers.dev web.app firebaseapp.com
-azurewebsites.net cloudfront.net s3.amazonaws.com
-fly.dev onrender.com glitch.me repl.co
-ngrok.io ngrok-free.app
-myshopify.com wordpress.com tumblr.com substack.com
+# Private suffixes: hosting where every customer gets a subdomain of the provider's domain, so
+# alice.herokuapp.com must never fill bob.herokuapp.com's login.
+github.io gitlab.io bitbucket.io codeberg.page readthedocs.io gitbook.io
+herokuapp.com appspot.com blogspot.com pythonanywhere.com
+netlify.app vercel.app now.sh pages.dev workers.dev trycloudflare.com web.app firebaseapp.com
+azurewebsites.net azurestaticapps.net cloudapp.net cloudfront.net s3.amazonaws.com cloudfunctions.net
+fly.dev onrender.com glitch.me repl.co surge.sh deno.dev up.railway.app hf.space streamlit.app
+ngrok.io ngrok.app ngrok-free.app loca.lt
+myshopify.com wordpress.com tumblr.com substack.com webflow.io neocities.org 000webhostapp.com
 sharepoint.com
 ddns.net duckdns.org no-ip.org dyndns.org

@@ -147,7 +147,8 @@ public final class Keyring {
 
     /**
      * Picks the vault (the id of the valid entry with the smallest stamp) and its current keyring
-     * (the greatest stamp with that id), as the Go app's ChooseKeyring does.
+     * (the greatest stamp with that id whose check equals the first one's), as the Go app's
+     * ChooseKeyring does.
      */
     public static Choice choose(List<Keyring> all, int minIter) {
         List<Keyring> valid = new ArrayList<>();
@@ -156,12 +157,16 @@ public final class Keyring {
         Collections.sort(valid, new Comparator<Keyring>() {
             public int compare(Keyring a, Keyring b) { return a.stamp.compareTo(b.stamp); }
         });
-        String id = valid.get(0).id;
+        String id = valid.get(0).id, check = valid.get(0).check;
         Keyring cur = null;
         List<String> others = new ArrayList<>();
         for (Keyring k : valid) {
-            if (k.id.equals(id)) cur = k;
-            else if (!others.contains(k.id)) others.add(k.id);
+            if (k.id.equals(id)) {
+                // The vault key never changes, so neither does its check: a later keyring of this
+                // vault that wraps another key (a broken client, or a stray write) is ignored, or
+                // this device would write entries the others cannot read under the same vault id.
+                if (k.check.equals(check)) cur = k; // ascending: the last one wins
+            } else if (!others.contains(k.id)) others.add(k.id);
         }
         return new Choice(cur, others);
     }

@@ -181,5 +181,20 @@ final class CryptoTest {
             check(!b.unlocked(), "b's key no longer opens the vault");
             eq(1, a.orphaned(), "b's entry is orphaned in a");
         }});
+
+        test("keyring: a later keyring of the vault with another check is ignored (Go ChooseKeyring)", new T.Case() { public void run() throws Exception {
+            byte[] vk = new byte[32], other = new byte[32];
+            other[0] = 1;
+            byte[] salt = new byte[16], nonce = new byte[12];
+            String id = "0123456789abcdef";
+            Keyring first = Keyring.wrap("pw", vk, id, salt, nonce, Crypto.MIN_ITER, new Stamp(1, 0, "a"));
+            Keyring changed = Keyring.wrap("pw2", vk, id, salt, nonce, Crypto.MIN_ITER, new Stamp(2, 0, "a"));
+            Keyring stray = Keyring.wrap("pw3", other, id, salt, nonce, Crypto.MIN_ITER, new Stamp(3, 0, "b"));
+            Keyring.Choice c = Keyring.choose(java.util.Arrays.asList(stray, first, changed), Crypto.MIN_ITER);
+            check(c.current == changed, "the latest keyring with the vault's check is current");
+            eq(0, c.others.size(), "the stray keyring is not another vault");
+            c = Keyring.choose(java.util.Arrays.asList(stray, first), Crypto.MIN_ITER);
+            check(c.current == first, "a stray keyring does not replace the first");
+        }});
     }
 }

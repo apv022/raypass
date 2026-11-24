@@ -9,7 +9,8 @@ import java.util.Set;
  * URL matching of DESIGN.md "URL matching": two URLs match when their registrable domains
  * (eTLD+1 with a short embedded list of multi-part public suffixes, else the last two labels) are
  * equal; IP addresses, localhost and single-label hosts need the same host and port; Android apps
- * are {@code androidapp://<package>} and match exactly. Ranking: same host (www. ignored) 0, same
+ * are {@code androidapp://<package>} and match exactly. Domain matching is for http and https only:
+ * any other scheme needs the same scheme, host and port. Ranking: same host (www. ignored) 0, same
  * registrable domain 1, no match -1. Mirrors the Go app's urlmatch package rule for rule, with
  * its suffix list loaded from urlmatch/suffixes.txt ({@link #loadSuffixes}). Pure Java so the
  * autofill matching is tested on the JDK.
@@ -17,40 +18,34 @@ import java.util.Set;
 public final class UrlMatch {
     private UrlMatch() {}
 
-    /** Multi-part public suffixes we know (kept in step with the Go app's urlmatch list). */
-    static final Set<String> SUFFIXES /* built-in fallback until loadSuffixes */ = new HashSet<>(Arrays.asList(
-            "co.uk", "org.uk", "me.uk", "ac.uk", "gov.uk", "ltd.uk", "plc.uk", "net.uk", "nhs.uk", "sch.uk",
-            "com.au", "net.au", "org.au", "edu.au", "gov.au", "asn.au", "id.au",
-            "co.nz", "net.nz", "org.nz", "govt.nz", "ac.nz",
-            "co.jp", "ne.jp", "or.jp", "ac.jp", "go.jp", "gr.jp",
-            "co.kr", "or.kr", "ne.kr", "go.kr", "ac.kr",
-            "co.in", "net.in", "org.in", "gov.in", "ac.in", "firm.in", "gen.in", "ind.in",
-            "co.za", "org.za", "gov.za", "ac.za", "web.za",
-            "co.il", "org.il", "ac.il", "gov.il",
-            "co.id", "or.id", "ac.id", "go.id", "web.id",
-            "co.th", "in.th", "ac.th", "go.th", "or.th",
-            "com.br", "net.br", "org.br", "gov.br", "edu.br",
-            "com.ar", "gob.ar", "org.ar", "net.ar",
-            "com.mx", "gob.mx", "org.mx", "edu.mx", "net.mx",
-            "com.cn", "net.cn", "org.cn", "gov.cn", "edu.cn",
-            "com.hk", "org.hk", "net.hk", "edu.hk", "gov.hk",
-            "com.tw", "org.tw", "net.tw", "edu.tw", "gov.tw",
-            "com.sg", "org.sg", "net.sg", "edu.sg", "gov.sg",
-            "com.my", "org.my", "net.my", "edu.my", "gov.my",
-            "com.tr", "org.tr", "net.tr", "gov.tr", "edu.tr",
-            "com.ua", "org.ua", "net.ua", "gov.ua", "in.ua",
-            "com.pl", "net.pl", "org.pl",
-            "com.es", "org.es", "nom.es",
-            "com.pt", "org.pt",
-            "com.ph", "org.ph", "net.ph",
-            "com.vn", "net.vn", "org.vn",
-            "com.pk", "org.pk", "net.pk",
-            "com.eg", "com.sa", "com.ng", "com.co", "com.pe", "com.ve", "com.uy", "com.ec",
-            "co.ke", "or.ke", "co.tz", "co.ug",
-            "github.io", "gitlab.io", "herokuapp.com", "netlify.app", "vercel.app", "pages.dev", "workers.dev",
-            "web.app", "firebaseapp.com", "appspot.com", "blogspot.com", "azurewebsites.net", "cloudfront.net",
-            "s3.amazonaws.com", "glitch.me", "fly.dev", "onrender.com", "repl.co", "ngrok.io", "ngrok-free.app",
-            "duckdns.org", "dyndns.org", "no-ip.org", "myshopify.com", "wordpress.com", "tumblr.com"));
+    /**
+     * The built-in copy of urlmatch/suffixes.txt (android/test.sh checks they are equal), used
+     * until {@link #loadSuffixes} replaces it with the copy packed as res/raw/suffixes.txt.
+     */
+    public static final java.util.List<String> BUILTIN = java.util.Collections.unmodifiableList(Arrays.asList(
+            "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "net.uk", "ltd.uk", "plc.uk", "sch.uk", "nhs.uk",
+            "police.uk", "com.au", "net.au", "org.au", "edu.au", "gov.au", "asn.au", "id.au", "co.nz", "org.nz",
+            "net.nz", "govt.nz", "ac.nz", "co.jp", "ne.jp", "or.jp", "ac.jp", "go.jp", "ad.jp", "ed.jp", "gr.jp",
+            "lg.jp", "co.kr", "or.kr", "ne.kr", "go.kr", "ac.kr", "co.in", "net.in", "org.in", "firm.in", "gen.in",
+            "ind.in", "ac.in", "gov.in", "com.br", "net.br", "org.br", "gov.br", "edu.br", "com.cn", "net.cn", "org.cn",
+            "gov.cn", "edu.cn", "com.tw", "org.tw", "net.tw", "edu.tw", "gov.tw", "com.hk", "org.hk", "net.hk",
+            "edu.hk", "gov.hk", "com.sg", "org.sg", "net.sg", "edu.sg", "gov.sg", "com.my", "org.my", "net.my",
+            "com.mx", "org.mx", "gob.mx", "edu.mx", "com.ar", "org.ar", "gob.ar", "com.tr", "org.tr", "gov.tr",
+            "edu.tr", "co.za", "org.za", "gov.za", "co.il", "org.il", "ac.il", "gov.il", "com.ua", "org.ua", "net.ua",
+            "co.id", "or.id", "ac.id", "go.id", "com.ph", "org.ph", "com.vn", "net.vn", "com.pk", "org.pk", "com.ng",
+            "org.ng", "com.eg", "com.sa", "co.th", "in.th", "ac.th", "go.th", "com.co", "com.pe", "com.ve", "co.at",
+            "or.at", "com.pl", "net.pl", "org.pl", "com.ru", "com.es", "org.es", "com.gr", "com.cy", "com.mt", "co.ke",
+            "com.bd", "com.np", "com.lk", "github.io", "gitlab.io", "bitbucket.io", "codeberg.page", "readthedocs.io",
+            "gitbook.io", "herokuapp.com", "appspot.com", "blogspot.com", "pythonanywhere.com", "netlify.app",
+            "vercel.app", "now.sh", "pages.dev", "workers.dev", "trycloudflare.com", "web.app", "firebaseapp.com",
+            "azurewebsites.net", "azurestaticapps.net", "cloudapp.net", "cloudfront.net", "s3.amazonaws.com",
+            "cloudfunctions.net", "fly.dev", "onrender.com", "glitch.me", "repl.co", "surge.sh", "deno.dev",
+            "up.railway.app", "hf.space", "streamlit.app", "ngrok.io", "ngrok.app", "ngrok-free.app", "loca.lt",
+            "myshopify.com", "wordpress.com", "tumblr.com", "substack.com", "webflow.io", "neocities.org",
+            "000webhostapp.com", "sharepoint.com", "ddns.net", "duckdns.org", "no-ip.org", "dyndns.org"));
+
+    /** Multi-part public suffixes in use: {@link #BUILTIN} until {@link #loadSuffixes}. */
+    static final Set<String> SUFFIXES = new HashSet<>(BUILTIN);
 
     /** Replaces the suffix list with the Go app's urlmatch/suffixes.txt ("#" comments, whitespace separated). */
     public static synchronized void loadSuffixes(java.io.InputStream in) throws java.io.IOException {
@@ -162,6 +157,8 @@ public final class UrlMatch {
         return l[l.length - 2] + "." + l[l.length - 1];
     }
 
+    private static boolean web(String scheme) { return scheme.equals("http") || scheme.equals("https"); }
+
     private static String noWww(String h) { return h.startsWith("www.") ? h.substring(4) : h; }
 
     /** 0: same host (www. ignored); 1: same registrable domain; -1: no match (Go's Match 2/1/0). */
@@ -170,6 +167,12 @@ public final class UrlMatch {
         if (a == null || b == null) return -1;
         boolean aa = a.scheme.equals("androidapp"), ba = b.scheme.equals("androidapp");
         if (aa || ba) return aa && ba && a.host.equals(b.host) ? 0 : -1;
+        // Registrable-domain matching is for web pages only: javascript://bank.com/ or ftp://bank.com
+        // has bank.com as its host but is not the bank's page. Anything not http(s) on either side
+        // matches only the same scheme, host and port.
+        if (!web(a.scheme) || !web(b.scheme)) {
+            return a.scheme.equals(b.scheme) && a.host.equals(b.host) && a.port.equals(b.port) ? 0 : -1;
+        }
         if (isIpOrLocal(a.host) || isIpOrLocal(b.host)) return a.host.equals(b.host) && a.port.equals(b.port) ? 0 : -1;
         if (a.host.equals(b.host) || noWww(a.host).equals(noWww(b.host))) return 0;
         return registrable(a.host).equals(registrable(b.host)) ? 1 : -1;

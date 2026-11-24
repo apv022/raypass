@@ -65,3 +65,44 @@ test('urlmatch: frame policy', () => {
   assert.ok(!U.fillable('chrome-extension://abc/popup.html'));
   assert.equal(U.displayHost('https://www.example.com/x'), 'www.example.com');
 });
+
+// The urlmatch package's TestMatch table, case for case, so Go and the extension agree.
+test('urlmatch: the Go TestMatch table', () => {
+  const cases = [
+    ['https://github.com', 'https://github.com/login', 2],
+    ['github.com', 'https://www.github.com/', 2],
+    ['https://github.com', 'https://gist.github.com', 1],
+    ['https://github.com', 'http://github.com', 2],
+    ['https://github.com', 'https://github.com.evil.com', 0],
+    ['https://evilgithub.com', 'https://github.com', 0],
+    ['https://alice.github.io', 'https://bob.github.io', 0],
+    ['https://shop.example.co.uk', 'https://login.example.co.uk', 1],
+    ['https://a.co.uk', 'https://b.co.uk', 0],
+    ['http://192.168.1.1:8080', 'http://192.168.1.1:8080/admin', 2],
+    ['http://192.168.1.1:8080', 'http://192.168.1.1:8081', 0],
+    ['http://localhost:3000', 'http://localhost:3000/x', 2],
+    ['http://localhost:3000', 'http://localhost:4000', 0],
+    ['androidapp://com.example.app', 'androidapp://com.example.app', 2],
+    ['androidapp://com.example.app', 'androidapp://com.example.app2', 0],
+    ['androidapp://com.example', 'https://example.com', 0],
+    ['', 'https://x.com', 0],
+    // Not web pages: the host alone must not let a login fill.
+    ['https://bank.com', 'javascript://bank.com/%0aalert(1)', 0],
+    ['https://bank.com', 'ftp://bank.com', 0],
+    ['https://bank.com', 'data://bank.com/x', 0],
+    ['https://bank.com', 'javascript:alert(1)', 0],
+    ['https://bank.com', 'data:text/html,https://bank.com', 0],
+    ['ftp://files.example.com', 'ftp://files.example.com/pub', 2],
+    ['ftp://files.example.com', 'https://files.example.com', 0],
+    // Userinfo is not the host; trailing dots and case do not matter.
+    ['https://bank.com', 'https://bank.com@evil.com/', 0],
+    ['https://bank.com', 'https://evil.com@bank.com/', 2],
+    ['https://bank.com', 'HTTPS://BANK.COM./login', 2],
+    ['https://bank.com', 'https://bank.com.evil.com.', 0],
+    // Private suffixes: every customer of a host is a different site.
+    ['https://alice.herokuapp.com', 'https://bob.herokuapp.com', 0],
+    ['https://shop.myshopify.com', 'https://admin.shop.myshopify.com', 1],
+    ['https://a.up.railway.app', 'https://b.up.railway.app', 0],
+  ];
+  for (const [a, b, want] of cases) assert.equal(U.rank(a, b), want, `rank(${a}, ${b})`);
+});

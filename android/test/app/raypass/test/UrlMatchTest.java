@@ -13,6 +13,14 @@ final class UrlMatchTest {
             }
             eq("bucket.s3.amazonaws.com", UrlMatch.registrable("bucket.s3.amazonaws.com"), "s3 is a suffix in the shared list");
         }});
+        test("url: the built-in suffix list equals ../urlmatch/suffixes.txt", new T.Case() { public void run() throws Exception {
+            java.util.List<String> want = new java.util.ArrayList<>();
+            for (String line : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(root, "urlmatch", "suffixes.txt"), java.nio.charset.StandardCharsets.UTF_8)) {
+                if (line.trim().startsWith("#")) continue;
+                for (String w : line.trim().split("\\s+")) if (!w.isEmpty()) want.add(w);
+            }
+            eq(want.toString(), UrlMatch.BUILTIN.toString(), "UrlMatch.BUILTIN is a copy of urlmatch/suffixes.txt");
+        }});
         test("url: the Go urlmatch test table", new T.Case() { public void run() {
             String[][] parse = {{"GitHub.com", "https://github.com"}, {"HTTP://Example.COM.:8080/x?y=1", "http://example.com:8080"},
                     {"https://[::1]:9000/", "https://[::1]:9000"}, {"androidapp://com.Example.App", "androidapp://com.example.app"},
@@ -30,7 +38,19 @@ final class UrlMatchTest {
                     {"http://192.168.1.1:8080", "http://192.168.1.1:8081", 0}, {"http://localhost:3000", "http://localhost:3000/x", 2},
                     {"http://localhost:3000", "http://localhost:4000", 0}, {"androidapp://com.example.app", "androidapp://com.example.app", 2},
                     {"androidapp://com.example.app", "androidapp://com.example.app2", 0}, {"androidapp://com.example", "https://example.com", 0},
-                    {"", "https://x.com", 0}};
+                    {"", "https://x.com", 0},
+                    // Not web pages: the host alone must not let a login fill.
+                    {"https://bank.com", "javascript://bank.com/%0aalert(1)", 0}, {"https://bank.com", "ftp://bank.com", 0},
+                    {"https://bank.com", "data://bank.com/x", 0}, {"https://bank.com", "javascript:alert(1)", 0},
+                    {"https://bank.com", "data:text/html,https://bank.com", 0}, {"ftp://files.example.com", "ftp://files.example.com/pub", 2},
+                    {"ftp://files.example.com", "https://files.example.com", 0},
+                    // Userinfo is not the host; trailing dots and case do not matter.
+                    {"https://bank.com", "https://bank.com@evil.com/", 0}, {"https://bank.com", "https://evil.com@bank.com/", 2},
+                    {"https://bank.com", "HTTPS://BANK.COM./login", 2}, {"https://bank.com", "https://bank.com.evil.com.", 0},
+                    // Private suffixes: every customer of a host is a different site.
+                    {"https://alice.herokuapp.com", "https://bob.herokuapp.com", 0},
+                    {"https://shop.myshopify.com", "https://admin.shop.myshopify.com", 1},
+                    {"https://a.up.railway.app", "https://b.up.railway.app", 0}};
             for (Object[] c : m) eq(2 - (Integer) c[2], UrlMatch.rank((String) c[0], (String) c[1]) == -1 ? 2 : UrlMatch.rank((String) c[0], (String) c[1]),
                     "match " + c[0] + " vs " + c[1]);
         }});
