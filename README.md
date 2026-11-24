@@ -66,7 +66,7 @@ for Chrome-family browsers and Firefox, the Android APK, and `SHA256SUMS`. Unpac
 your platform and follow its `INSTALL.txt` (`sol app install raypass-app`, then
 `raypass-native install` for the extension).
 
-Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed (a tag with a
+Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed, or when it is run by hand from the Actions tab with a tag name (a tag with a
 `-suffix` is published as a pre-release); `scripts/release.sh 0.1.0` builds the same files into
 `dist/` locally. To sign the APK with a stable key, set the repository secrets
 `RAYPASS_KEYSTORE_B64` (base64 of a PKCS12 keystore), `RAYPASS_KEY_ALIAS` and

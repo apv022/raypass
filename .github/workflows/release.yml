@@ -1,4 +1,4 @@
-# Push a tag vX.Y.Z (or vX.Y.Z-beta.N, published as a pre-release) to build and publish every
+# Push a tag vX.Y.Z (or run it by hand with a tag name: it creates the tag) (or vX.Y.Z-beta.N, published as a pre-release) to build and publish every
 # Raypass binary: desktop app + native host for Linux/macOS/Windows on amd64/arm64, the browser
 # extension zips, the Android APK and SHA256SUMS. The tag's version must equal app.json's and
 # extension/manifest.json's (scripts/release.sh checks).
@@ -10,12 +10,18 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to create and release, e.g. v0.1.0 (made on the commit this runs on)'
+        required: true
 permissions:
   contents: write
 jobs:
   release:
     runs-on: ubuntu-24.04
     env:
+      TAG: ${{ inputs.tag || github.ref_name }}
       HAS_KEY: ${{ secrets.RAYPASS_KEYSTORE_B64 != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -43,12 +49,12 @@ jobs:
         env:
           RAYPASS_KEY_ALIAS: ${{ secrets.RAYPASS_KEY_ALIAS }}
           RAYPASS_KEYSTORE_PASS: ${{ secrets.RAYPASS_KEYSTORE_PASS }}
-        run: scripts/release.sh "$GITHUB_REF_NAME"
+        run: scripts/release.sh "$TAG"
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          v=${GITHUB_REF_NAME#v}
+          v=${TAG#v}
           pre=""; case "$v" in *-*) pre=--prerelease;; esac
           apk=$(cd dist && ls raypass-*.apk)
           {
@@ -66,4 +72,4 @@ jobs:
             echo
             case "$apk" in *debugkey*) echo "> The APK is signed with a throwaway key made for this build, so a later release can't install over it: uninstall first and reconnect Raypass to Sol. Releases signed with a stable key need the RAYPASS_KEYSTORE_* repository secrets.";; esac
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Raypass $v" --notes-file "$RUNNER_TEMP/notes.md" $pre
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Raypass $v" --notes-file "$RUNNER_TEMP/notes.md" $pre
