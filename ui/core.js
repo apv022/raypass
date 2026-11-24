@@ -10,6 +10,7 @@
 import { call, html, render } from '/sol.js';
 import { toast } from '/kit/kit.js';
 import { isLocked, clipDecision } from '/lib.js';
+import { watchLockState } from '/lockwatch.js';
 
 /** The UI state. `rows`/`trash` are list rows (no secrets); `item` is a revealed item. */
 export const state = {
@@ -28,8 +29,11 @@ export const state = {
   loaded: false,
 };
 
-/** Callbacks the app module sets: draw() repaints the vault, locked() shows the unlock screen. */
-export const hooks = { draw() {}, locked() {} };
+/**
+ * Callbacks the app module sets: draw() repaints the vault, locked() shows the unlock screen,
+ * lockState({locked, locks_in}) hears the app's live lock state (watchLock).
+ */
+export const hooks = { draw() {}, locked() {}, lockState() {} };
 
 // ---------- preferences (UI only, never vault data) ----------
 
@@ -43,18 +47,13 @@ export const prefs = {
 
 /**
  * Calls raypass.<name>. A `locked` answer wipes every secret and shows the unlock screen, then
- * rethrows (callers usually ignore it: the screen already says what happened). Every status
- * answer re-arms the auto-lock check from its `locks_in`.
+ * rethrows (callers usually ignore it: the screen already says what happened).
  */
 export async function rp(name, args) {
   try {
     const out = await call('raypass.' + name, args === undefined ? {} : args);
-    if (name === 'status') { state.status = out; noteStatus(out); }
-    else if (!NOT_USE.has(name)) {
-      lockAt = 0; // the app re-armed its timer: auto_lock minutes from now
-      if (name === 'settings' && state.status && out) state.status = { ...state.status, ...out };
-    }
-    armIdle();
+    if (name === 'status') state.status = out;
+    else if (name === 'settings' && state.status && out) state.status = { ...state.status, ...out };
     return out;
   } catch (e) {
     if (isLocked(e)) { wipe(); hooks.locked(); }
@@ -81,7 +80,6 @@ export function wipe() {
   state.reveal.clear();
   state.rows = []; state.trash = []; state.loaded = false;
   stopTotp();
-  clearTimeout(idleTimer); idleTimer = 0; lockAt = 0;
   for (const d of document.querySelectorAll('sol-dialog, sol-sheet')) { try { d.close(); } catch { /* not open */ } d.remove(); }
   for (const id of ['detail', 'tool', 'rows']) { const n = document.getElementById(id); if (n) n.replaceChildren(); }
 }
@@ -94,43 +92,20 @@ export async function lockNow() {
 }
 
 // Auto-lock: the app locks itself after s.auto_lock minutes without use, for every client at
-// once; raypass.status says how many seconds are left (`locks_in`, and status itself does not
-// count as use). This page never locks the vault on its own idleness (another client, such as
-// the browser extension, may be using it): it arms one timer for the moment the app will lock,
-// then asks status once. Locked: it wipes and shows the unlock screen. Not locked (someone used
-// the vault meanwhile): it re-arms from the new `locks_in`. One check per lock deadline, never a
-// poll.
-let idleTimer = 0;
-let lockAt = 0; // ms timestamp when the app will auto-lock, 0 = unknown or never
-/** Actions that do not count as use of the vault (the app does not re-arm auto-lock for them). */
-const NOT_USE = new Set(['status', 'generate', 'lock']);
+// once, and pushes its lock state to this page over /lockstate (ui/lockwatch.js; Sol's daemon
+// streams it through). The page never locks the vault on its own idleness (another client,
+// such as the browser extension, may be using it) and keeps no timer: when the app says
+// locked, the page wipes and shows the unlock screen; when another client unlocks, the page
+// can open the vault again. No polling.
+let stopWatch = null;
 
-/** Records the lock deadline from a raypass.status answer. */
-function noteStatus(s) {
-  lockAt = s && !s.locked && s.locks_in > 0 ? Date.now() + s.locks_in * 1000 : 0;
-}
-
-/** Re-arms the auto-lock check from the last known deadline (or the setting, before one is known). */
-export function armIdle() {
-  clearTimeout(idleTimer);
-  idleTimer = 0;
-  const s = state.status;
-  if (!s || s.locked || !s.initialized || !s.auto_lock) { lockAt = 0; return; }
-  if (!lockAt) lockAt = Date.now() + s.auto_lock * 60e3;
-  idleTimer = setTimeout(checkLocked, Math.max(1000, lockAt - Date.now() + 500));
-}
-
-async function checkLocked() {
-  idleTimer = 0;
-  let s;
-  try { s = await call('raypass.status', {}); } catch (e) {
-    if (isLocked(e)) { wipe(); hooks.locked(); }
-    return;
-  }
-  state.status = s;
-  noteStatus(s);
-  if (s.locked) { wipe(); hooks.locked(); return; }
-  armIdle();
+/** Starts following the app's lock state (once); every state goes to hooks.lockState. */
+export function watchLock() {
+  if (stopWatch) return;
+  stopWatch = watchLockState((s) => {
+    if (state.status) state.status = { ...state.status, locked: s.locked, locks_in: s.locks_in };
+    hooks.lockState(s);
+  });
 }
 
 // ---------- TOTP timer (one at a time, for the item on screen) ----------

@@ -108,6 +108,13 @@ type App struct {
 
 	setupMu sync.Mutex
 
+	// Live lock state for the web UI (lockstate.go): each open /lockstate stream has a channel
+	// here that is poked whenever the lock state or the auto-lock deadline changes. subMu is
+	// taken after a.mu, never before it.
+	subMu    sync.Mutex
+	lockSubs map[chan struct{}]struct{}
+	runDone  <-chan struct{} // closed when Start's context ends; ends open streams
+
 	noFollow bool
 	started  bool
 	cancel   context.CancelFunc
@@ -190,6 +197,7 @@ func (a *App) Start(ctx context.Context) error {
 	a.clk = crdt.NewClock(a.dev)
 	a.clk.Wall = func() int64 { return a.clock.Now().UnixMilli() }
 	ctx, a.cancel = context.WithCancel(ctx)
+	a.runDone = ctx.Done()
 	// Subscribe before the first read so nothing slips between them.
 	var ev <-chan sol.Event
 	if !a.noFollow {
@@ -395,6 +403,7 @@ func (a *App) lockLocked() {
 	}
 	a.lockGen++
 	a.lockAt = time.Time{}
+	a.notifyLock()
 	if a.vk == nil {
 		return
 	}
@@ -419,6 +428,7 @@ func (a *App) touch() {
 	}
 	a.lockGen++
 	a.lockAt = time.Time{}
+	defer a.notifyLock() // the deadline moved (or went away)
 	if a.vk == nil || a.settings.AutoLock <= 0 {
 		return
 	}

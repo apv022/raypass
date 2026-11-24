@@ -153,10 +153,17 @@ Changing `pass` of a login appends the previous one to `history`.
 - Auto-lock after `s.auto_lock` minutes without use; `raypass.lock` at once. Use is any action
   that needs the vault, plus `setup`, `unlock`, `change_password` and `settings`; `status`,
   `generate` and `lock` are not use, so a client that only shows the lock state never keeps the
-  vault open. `raypass.status` reports `locks_in`, the seconds left (0 when locked or never): a UI
-  arms one timer for that moment and asks `status` again then, and never locks the vault because
-  it was idle itself (another client may be using it). Lock
+  vault open. `raypass.status` reports `locks_in`, the seconds left (0 when locked or never). No
+  client locks the vault because it was idle itself (another client may be using it). Lock
   zeroes vk and drops all decrypted state (the folded map is rebuilt on unlock).
+- Live lock state: `GET /lockstate` on the app's UI origin is a `text/event-stream` (Sol-Self
+  only, like every action) that sends `data: {"locked","locks_in"}` at once and again whenever
+  the vault locks or unlocks or the auto-lock deadline moves, with a `: keepalive` comment every
+  25 s. The web UI follows it (EventSource, reopened with backoff if refused): locked wipes and
+  shows the unlock screen; unlocked by another client while it shows the unlock screen opens
+  the vault. It keeps no timer and never polls. Sol's daemon proxies app origins with
+  `httputil.ReverseProxy`, which flushes `text/event-stream` responses as written, so the
+  stream works through it (the tests run it behind such a proxy).
 - While locked, actions that need the vault answer `{"error":{"code":"forbidden","message":"locked"}}`
   (HTTP 403, message exactly `locked`), so clients can show the unlock screen.
 - Ciphertext entries keep arriving while locked (events stream); they are stored as ciphertext
@@ -253,7 +260,7 @@ vault (sidebar: All, Favourites, Logins, Notes, Cards, Identities, Wallets, fold
 Generator, Health, Settings), list with search, item detail with copy buttons, reveal toggles,
 live TOTP ring, edit forms per type, generator, import/export. Clipboard is cleared after
 `s.clip_clear` seconds (only if it still holds what we copied). Locks itself on the `locked` error
-from any call. Every value from data is escaped (textContent, never innerHTML with data).
+from any call and on a locked state from `/lockstate`. Every value from data is escaped (textContent, never innerHTML with data).
 
 ## Browser extension (`extension/`, Manifest V3, Chrome family and Firefox)
 

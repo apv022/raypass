@@ -26,6 +26,7 @@ func (a *App) buildHandler() http.Handler {
 		panic("raypass: actions without a handler: " + strings.Join(miss, ", "))
 	}
 	mux.Handle("POST /_sol/actions/", act)
+	mux.HandleFunc("GET /lockstate", a.serveLockState)
 	mux.Handle("GET /kit/", http.StripPrefix("/kit/", http.FileServerFS(kit.FS)))
 	mux.HandleFunc("GET /sol.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")

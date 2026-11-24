@@ -6,7 +6,7 @@ import { events, html, render, raw } from '/sol.js';
 import { toast, showMenu, contextMenu } from '/kit/kit.js';
 import { TYPES, typeOf, matchesQuery, inView, folderTree, rowSubtitle, stepIndex, isLocked, relativeTime } from '/lib.js';
 import { svg, icon } from '/icons.js';
-import { state, hooks, rp, act, fail, copy, wipe, lockNow, armIdle, stopTotp } from '/core.js';
+import { state, hooks, rp, act, fail, copy, wipe, lockNow, watchLock, stopTotp } from '/core.js';
 import { showSetup, showUnlock } from '/gate.js';
 import { drawDetail, loadItem, wireDetail, tileHtml, copyField, trashItems, restoreItems, purgeItems } from '/detail.js';
 import { openEditor, cancel as cancelEdit } from '/edit.js';
@@ -252,9 +252,15 @@ function showLocked() {
   showUnlock(onUnlocked);
 }
 
+let entering = false;
 async function onUnlocked() {
+  // Both the unlock form and the live lock state (unlocked here or by another client) land
+  // here, in either order: enter the vault once.
+  if (entering || $app.dataset.mode === 'vault') return;
+  entering = true;
   gateShown = '';
-  try { state.status = await rp('status'); } catch (e) { fail(e); }
+  try { state.status = await rp('status'); } catch (e) { fail(e); } finally { entering = false; }
+  if ($app.dataset.mode === 'vault') return;
   $('gate').replaceChildren();
   setMode('vault');
   const r = parseHash();
@@ -262,7 +268,6 @@ async function onUnlocked() {
   setScreen(phoneQ.matches ? (r ? (isTool() ? 'tool' : r.sel ? 'detail' : 'list') : 'side') : isTool() ? 'tool' : 'list');
   draw();
   if (isTool()) drawTool();
-  armIdle();
   listen();
   await refresh();
   if (state.sel) loadItem(state.sel);
@@ -281,7 +286,13 @@ hooks.newItem = newItem;
 hooks.go = go;
 hooks.viewTitle = () => viewTitle();
 hooks.toast = (m, kind) => toast(m, kind ? { kind } : undefined);
-hooks.armIdle = armIdle;
+// The app's live lock state (/lockstate): locked wipes the vault screen; unlocked by another
+// client (the extension, sol do) while this page shows the unlock screen opens the vault.
+hooks.lockState = (s) => {
+  const mode = $app.dataset.mode;
+  if (s.locked) { if (mode === 'vault') showLocked(); }
+  else if (mode === 'locked' && gateShown === 'unlock') onUnlocked();
+};
 hooks.defaultFolder = () => (state.view.kind === 'folder' ? state.view.name : '');
 hooks.openItem = (id) => go({ kind: 'all' }, id);
 
@@ -416,6 +427,7 @@ async function boot() {
     return;
   }
   state.status = st;
+  watchLock();
   if (!st.initialized) { setMode('setup'); showSetup(onUnlocked); return; }
   if (st.locked) { showLocked(); return; }
   onUnlocked();

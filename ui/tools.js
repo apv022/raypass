@@ -265,7 +265,7 @@ function wireSettings(root) {
     const k = e.target.dataset.set;
     if (k) {
       const r = await act('settings', { [k]: +e.target.value });
-      if (r) { state.status = { ...state.status, ...r }; hooks.toast('Saved'); hooks.armIdle(); }
+      if (r) { state.status = { ...state.status, ...r }; hooks.toast('Saved'); }
       return;
     }
     if (e.target.id === 'imp-file' && e.target.files[0]) {
