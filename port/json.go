@@ -239,7 +239,9 @@ func ExportEncrypted(items []vault.Item, password string, iter int, now time.Tim
 		return nil, err
 	}
 	defer vault.Wipe(plain)
-	f, err := vault.SealExport(password, plain, iter)
+	// Fresh salt and nonce; the caller picks iter (vault.SealExport would refuse the low counts
+	// tests use).
+	f, err := vault.SealExportWith(password, plain, iter, vault.RandomBytes(vault.SaltSize), vault.RandomBytes(vault.NonceSize))
 	if err != nil {
 		return nil, err
 	}
