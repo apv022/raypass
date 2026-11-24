@@ -120,7 +120,7 @@ function drawHealth() {
   const itemRow = (id, sub) => { const r = rowOf(id); return r ? html`<button type="button" class="hrow" data-open="${r.id}">${tileHtml(r, 's')}<span class="hrow-text"><span class="row-title">${r.name}</span><span class="row-sub">${sub || r.user || typeOf(r.type).label}</span></span><sol-icon name="chevron"></sol-icon></button>` : ''; };
   const weak = h.weak || [], reused = h.reused || [], old = h.old || [];
   const score = Math.max(0, Math.min(100, Math.round(h.score ?? 100)));
-  const issues = weak.length + reused.reduce((n, g) => n + g.length, 0) + old.length;
+  const issues = new Set([...weak, ...reused.flat(), ...old]).size;
   render($('tool'), html`${toolBar('Password health')}
     <div class="t-scroll"><div class="t-col">
       <div class="health-hero" data-tone="${score >= 75 ? 'ok' : score >= 50 ? 'warn' : 'bad'}">

@@ -175,7 +175,7 @@ function drawSide() {
   render($('folders'), html`${folders.map((f) => html`<button type="button" class="nav-item fold" data-view="${viewKey({ kind: 'folder', name: f.name })}" data-depth="${Math.min(f.depth, 4)}" aria-current="${cur === viewKey({ kind: 'folder', name: f.name }) ? 'page' : 'false'}" title="${f.name}">
     <sol-icon name="folder"></sol-icon><span class="grow nav-label-text">${f.label}</span><span class="nav-count">${f.count}</span></button>`)}`);
   const h = state.health;
-  const issues = h ? (h.weak || []).length + (h.reused || []).length + (h.old || []).length : 0;
+  const issues = h ? new Set([...(h.weak || []), ...(h.reused || []).flat(), ...(h.old || [])]).size : 0;
   render($('tools'), html`${TOOLS.map((t) => html`<button type="button" class="nav-item" data-view="${t.kind}" aria-current="${cur === t.kind ? 'page' : 'false'}">
     ${icon(t.icon, 18)}<span class="grow">${t.label}</span>${t.kind === 'health' && issues ? html`<span class="badge warn">${issues}</span>` : ''}</button>`)}`);
 }

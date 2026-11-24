@@ -105,7 +105,7 @@ export function showUnlock(onDone) {
   render($('gate'), html`<form class="gate-card" id="unlock" autocomplete="off">
     <div class="gate-icon locked"><img src="/icon.svg" alt="" width="72" height="72"></div>
     <h1>Raypass is locked</h1>
-    <p class="gate-sub">${typeof n === 'number' ? `Enter your master password to open ${n === 1 ? '1 item' : n + ' items'}.` : 'Enter your master password.'}</p>
+    <p class="gate-sub">${typeof n === 'number' && n > 0 ? `Enter your master password to open ${n === 1 ? '1 item' : n + ' items'}.` : 'Enter your master password.'}</p>
     <div class="gate-fields">${pwField('pw', 'Master password', { autofocus: true })}</div>
     <p class="form-err" role="alert"></p>
     <button class="primary large wide" type="submit">${svg('unlock', 18)}<span>Unlock</span></button>
