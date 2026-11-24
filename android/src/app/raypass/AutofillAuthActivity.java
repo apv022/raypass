@@ -1,0 +1,66 @@
+package app.raypass;
+
+import android.app.assist.AssistStructure;
+import android.content.Intent;
+import android.os.Bundle;
+import android.service.autofill.FillResponse;
+import android.view.autofill.AutofillManager;
+import android.widget.ScrollView;
+import android.widget.Toast;
+
+/**
+ * The small dialog autofill opens while Raypass is locked: unlock (password or biometrics), then
+ * either hand the matching datasets back to the autofill framework (mode "fill") or finish a save
+ * that was waiting for the unlock (mode "save", the login kept in memory under a token).
+ */
+public class AutofillAuthActivity extends BaseActivity {
+    @Override
+    boolean needsVault() { return false; }
+
+    @Override
+    protected void onCreate(Bundle b) {
+        super.onCreate(b);
+        setFinishOnTouchOutside(false);
+        if (repo.vault() != null) {
+            done();
+            return;
+        }
+        ScrollView sv = new ScrollView(this);
+        sv.addView(UnlockView.build(this, false, new UnlockView.Done() {
+            public void unlocked() { done(); }
+        }));
+        setContentView(sv);
+    }
+
+    private void done() {
+        String mode = getIntent().getStringExtra("mode");
+        if ("save".equals(mode)) {
+            String[] s = Repo.pendingSaves.remove(String.valueOf(getIntent().getStringExtra("token")));
+            if (s != null) {
+                try {
+                    repo.saveLogin(s[0], s[1], s[2]);
+                    Toast.makeText(this, "Saved to Raypass", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Raypass could not save this login", Toast.LENGTH_LONG).show();
+                }
+                s[2] = null;
+            }
+            setResult(RESULT_OK);
+            finish();
+            return;
+        }
+        AssistStructure st = getIntent().getParcelableExtra(AutofillManager.EXTRA_ASSIST_STRUCTURE);
+        FillResponse r = null;
+        if (st != null && repo.vault() != null) {
+            AutofillParser p = new AutofillParser(st);
+            if (p.url != null) r = RaypassAutofillService.response(this, p, repo.vault());
+        }
+        if (r == null) {
+            Toast.makeText(this, "No saved login for this app or site", Toast.LENGTH_SHORT).show();
+            setResult(RESULT_CANCELED);
+        } else {
+            setResult(RESULT_OK, new Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, r));
+        }
+        finish();
+    }
+}
