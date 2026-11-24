@@ -313,6 +313,9 @@ type Row struct {
 	HasTOTP bool     `json:"has_totp"`
 	Updated int64    `json:"updated"`
 	Trashed int64    `json:"trashed"`
+	// Insecure is set by raypass.match only: the page is plain http and the login was saved
+	// for https (urlmatch.Insecure). raypass.fill refuses it unless allow_insecure is given.
+	Insecure bool `json:"insecure,omitempty"`
 }
 
 func rowOf(it vault.Item) Row {
@@ -480,15 +483,18 @@ func (a *App) actMatch(_ context.Context, c sol.Call, st *vault.State) (any, err
 	}
 	rows := []Row{}
 	for _, it := range matches(st, in.URL) {
-		rows = append(rows, rowOf(it))
+		r := rowOf(it)
+		r.Insecure = urlmatch.Insecure(it.URLs, in.URL)
+		rows = append(rows, r)
 	}
 	return rows, nil
 }
 
 func (a *App) actFill(_ context.Context, c sol.Call, st *vault.State) (any, error) {
 	var in struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
+		ID            string `json:"id"`
+		URL           string `json:"url"`
+		AllowInsecure bool   `json:"allow_insecure"`
 	}
 	if err := decode(c, &in); err != nil {
 		return nil, err
@@ -499,6 +505,11 @@ func (a *App) actFill(_ context.Context, c sol.Call, st *vault.State) (any, erro
 	}
 	if it.Type != vault.TypeLogin || it.Trashed != 0 || urlmatch.Best(it.URLs, in.URL) == 0 {
 		return nil, sol.Errorf("forbidden", "url does not match")
+	}
+	// A login saved for https offered on a plain http page: whoever is on the network sees
+	// what is typed there. Only an explicit allow_insecure (the person confirmed) fills it.
+	if !in.AllowInsecure && urlmatch.Insecure(it.URLs, in.URL) {
+		return nil, sol.Errorf("forbidden", "insecure page")
 	}
 	out := map[string]any{"user": it.User, "pass": it.Pass}
 	if it.TOTP != "" {
@@ -758,6 +769,9 @@ func (a *App) bulk(ctx context.Context, c sol.Call, st *vault.State, key string,
 		return nil, inputErr(err)
 	}
 	if c.DryRun {
+		if ids == nil {
+			ids = []string{} // all_trash with an empty trash: a list, not null
+		}
 		return dry(map[string]any{key: n, "ids": ids}), nil
 	}
 	if err := a.appendOps(ctx, ops); err != nil {

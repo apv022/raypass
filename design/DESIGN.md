@@ -189,8 +189,8 @@ locked. Secrets are only in outputs of actions marked **reveals**; those are `ap
 | `raypass.purge` | destructive, vault, agents | `ids` (must be in trash) or `all_trash: true` | `{"purged": n}` |
 | `raypass.generate` | read | `mode` (`chars`/`words`), `length` (chars, 4–128, default 20), `upper`,`lower`,`digits`,`symbols` (bools, default true), `avoid_ambiguous`, `words` (3–20, default 5), `separator` (default `-`), `capitalize`, `number` | `{"password","entropy_bits"}` |
 | `raypass.totp` | read, vault, **reveals** | `id` | `{"code","period","remaining","digits"}` |
-| `raypass.match` | read, vault | `url` | logins whose URLs match (see below), like `list` rows, best match first |
-| `raypass.fill` | read, vault, **reveals** | `id`, `url` | `{"user","pass","totp"?}`; refuses (`forbidden`, "url does not match") unless one of the item's URLs matches `url` |
+| `raypass.match` | read, vault | `url` | logins whose URLs match (see below), like `list` rows, best match first; a row also has `"insecure": true` when `url` is plain `http` and the login matches it only through `https` URLs |
+| `raypass.fill` | read, vault, **reveals** | `id`, `url`, `allow_insecure?` | `{"user","pass","totp"?}`; refuses (`forbidden`, "url does not match") unless one of the item's URLs matches `url`, and (`forbidden`, "insecure page") an insecure match (as in `match`) unless `allow_insecure: true` |
 | `raypass.save_login` | write, vault, agents | `url`, `user`, `pass`, `name?` | `{"id","created":bool}`; updates the pass of an existing login with the same user and matching URL (history kept), else adds one named after the host |
 | `raypass.folders` | read, vault | – | `[{"name","count"}]` |
 | `raypass.health` | read, vault | – | `{"weak":[ids],"reused":[[ids]],"old":[ids],"score"}` (no secrets) |
@@ -237,6 +237,14 @@ and match exactly. Registrable-domain matching is for `http`/`https` only: a URL
 scheme (`javascript://bank.com/`, `ftp://bank.com`) matches only the same scheme, host and port.
 Best-match ordering: exact host, then same registrable domain; then by name.
 
+**Insecure pages.** A login whose matching URLs are all `https` offered on a plain `http` page
+of the same site (a downgraded or misconfigured page: anyone on the network reads what is
+typed there) is *insecure*: `raypass.match` marks the row `"insecure": true` and `raypass.fill`
+answers `forbidden` "insecure page" unless called with `allow_insecure: true`. A login that also
+has a matching `http` URL was saved for that page on purpose and is not insecure. Clients send
+`allow_insecure` only after the person confirmed a warning (the extension's "Fill anyway").
+The web UI does not fill pages and is unaffected.
+
 ## Web UI (served by the app at `/`, opened at `http://raypass.localhost:7777/`)
 
 Plain JS modules, `ui/kit` tokens and components (`/kit/...` served from `ui/kit`'s embed), the
@@ -264,6 +272,11 @@ Sol's own sign-in (the admin token of the OS user) is the gate. Host name:
 - Popup: unlock, matches for the current tab (fill / copy user / copy pass / copy TOTP), search
   all, generator.
 - Keyboard shortcut `Ctrl+Shift+L` fills the best match.
+- Insecure pages: a match marked `insecure` shows "Not secure" in the field's panel and the
+  popup; filling it (or copying its password from the popup) needs a second, real click on a
+  "Fill anyway" warning, and only then is `allow_insecure` sent. The background's own
+  password comparison before offering to save sends `allow_insecure` (the secret never reaches
+  the page).
 - Fill only into the top frame or same-registrable-domain frames; the URL passed to
   `raypass.fill` is the frame's URL as seen by the background (`sender.url`), never from the page.
 - `raypass-native install` writes the host manifests for Chrome, Chromium, Brave, Edge, Firefox
@@ -282,6 +295,10 @@ with its token, and does the crypto above itself in Java (`javax.crypto`, no thi
 - `AutofillService`: fills logins into apps (match `androidapp://<package>` or the web domain
   that the autofill structure reports for browsers), offers to save new logins
   (`SaveInfo`), and an "Open Raypass" dataset when locked (authentication intent).
+  No insecure-page warning on Android: browsers report the page's domain to an autofill
+  service (`ViewStructure.getWebDomain`) but its scheme only on Android 9+ and not from every
+  browser (`getWebScheme`, else taken as `https`), so an http page cannot be told from https
+  reliably. Android fills as before; the warning is the extension's.
 - Clipboard: copies are marked sensitive (`ClipDescription.EXTRA_IS_SENSITIVE`) and cleared.
 - `FLAG_SECURE` on every window that may show a secret.
 - Built with no Gradle, like Sol's own APK (`android/build.sh`: javac, d8, aapt2, apksigner).

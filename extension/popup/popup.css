@@ -61,3 +61,7 @@ main { padding: var(--space-3); }
 
 .toast { position: fixed; left: 50%; bottom: var(--space-3); transform: translateX(-50%); background: var(--label); color: var(--canvas);
   padding: 6px var(--space-3); border-radius: var(--radius-pill); font-size: var(--fs-subhead); box-shadow: var(--shadow-float); white-space: nowrap; }
+
+/* The insecure-page warning of a login saved for https on a plain http page. */
+.warn { color: var(--red); font-size: var(--fs-subhead); font-weight: 600; white-space: normal; }
+.btn.danger { background: var(--red); color: #fff; }

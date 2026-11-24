@@ -20,6 +20,8 @@
   const itemId = (v) => typeof v === 'string' && ID.test(v);
   const token = (v) => typeof v === 'string' && TOKEN.test(v);
   const tabId = (v) => Number.isInteger(v) && v >= 0;
+  // Only ever true, and only sent after the person clicked "Fill anyway" on an insecure page.
+  const confirmed = (v) => v === undefined || v === true;
   const seconds = (v) => Number.isInteger(v) && v >= 0 && v <= 3600;
   const plainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) &&
     Object.getPrototypeOf(v) === Object.prototype;
@@ -29,7 +31,7 @@
   const CONTENT = {
     'cs.state': { login: bool, focused: bool },
     'cs.matches': {},
-    'cs.fill': { id: itemId },
+    'cs.fill': { id: itemId, allowInsecure: confirmed },
     'cs.username': { user: str(256) },
     'cs.submitted': { user: str(256), pass: (v) => typeof v === 'string' && v.length > 0 && v.length <= 1024 },
     'cs.pendingSave': {},
@@ -39,7 +41,7 @@
 
   const EXT = {
     'ext.call': { action: (v) => ACTIONS.includes(v), args },
-    'ext.fillTab': { tabId, id: itemId },
+    'ext.fillTab': { tabId, id: itemId, allowInsecure: confirmed },
     'ext.fillGenerated': { tabId, password: (v) => typeof v === 'string' && v.length > 0 && v.length <= 1024 },
     'ext.pendingSave': { tabId },
     'ext.saveAnswer': { tabId, token, save: bool },

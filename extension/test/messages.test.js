@@ -11,6 +11,9 @@ test('messages: content scripts get only their own operations', () => {
   M.content({ type: 'cs.submitted', user: 'alice', pass: 'p' });
   M.content({ type: 'cs.saveAnswer', token: 'a'.repeat(32), save: true });
   bad(() => M.content({ type: 'ext.call', action: 'raypass.get', args: {} }));
+  M.content({ type: 'cs.fill', id: '0123456789abcdef', allowInsecure: true });
+  bad(() => M.content({ type: 'cs.fill', id: '0123456789abcdef', allowInsecure: false }));
+  bad(() => M.content({ type: 'cs.fill', id: '0123456789abcdef', allowInsecure: 'yes' }));
   bad(() => M.content({ type: 'cs.fill', id: '0123456789abcdef', url: 'https://evil.example' }));
   bad(() => M.content({ type: 'cs.matches', url: 'https://evil.example' }));
   bad(() => M.content({ type: 'cs.fill', id: '../../etc' }));
@@ -35,6 +38,8 @@ test('messages: extension pages get the allowlisted actions only', () => {
   bad(() => M.ext({ type: 'ext.call', action: 'raypass.get', args: { x: 'y'.repeat(70000) } }));
   M.ext({ type: 'ext.fillTab', tabId: 3, id: '0123456789abcdef' });
   bad(() => M.ext({ type: 'ext.fillTab', tabId: -1, id: '0123456789abcdef' }));
+  M.ext({ type: 'ext.fillTab', tabId: 3, id: '0123456789abcdef', allowInsecure: true });
+  bad(() => M.ext({ type: 'ext.fillTab', tabId: 3, id: '0123456789abcdef', allowInsecure: 1 }));
   bad(() => M.ext({ type: 'ext.clipArm', seconds: 1e9 }));
   M.ext({ type: 'ext.clipArm', seconds: 30 });
   assert.equal(M.ACTIONS.length, 10);

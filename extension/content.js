@@ -70,6 +70,9 @@
     .row:hover, .row:focus { background: rgba(232,161,0,.16); outline: none; }
     .name { font-weight: 600; }
     .user { color: rgba(60,60,67,.6); font-size: 12px; }
+    .warn { color: #C4321F; font-size: 12px; font-weight: 600; }
+    .panel .actions { display: flex; gap: 8px; justify-content: flex-end; padding: 4px 10px 8px; }
+    .btn.danger { background: #C4321F; color: #fff; }
     .note { padding: 8px 10px; color: rgba(60,60,67,.6); }
     .head { padding: 6px 10px 4px; font-size: 11px; font-weight: 600; color: rgba(60,60,67,.6); letter-spacing: .02em; text-transform: uppercase; }
     .btn { border: 0; border-radius: 8px; padding: 0 12px; height: 28px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -89,6 +92,8 @@
     @media (prefers-color-scheme: dark) {
       .panel, .bar { background: #1C1C1E; color: #F5F5F7; border-color: rgba(84,84,88,.6); }
       .user, .note, .head, .bar .sub { color: rgba(235,235,245,.6); }
+      .warn { color: #FF6B5A; }
+      .btn.danger { background: #FF6B5A; color: #1D1D1F; }
       .btn { background: #2C2C2E; color: #F5F5F7; }
       .btn.primary { background: #FFB524; color: #1D1D1F; }
       .row:hover, .row:focus { background: rgba(255,181,36,.16); }
@@ -241,9 +246,11 @@
         b.type = 'button';
         b.setAttribute('role', 'option');
         b.append(el('span', 'name', it.name || '(no name)'), el('span', 'user', it.user || ''));
+        if (it.insecure) b.append(el('span', 'warn', 'Not secure: saved for https'));
         b.addEventListener('mousedown', (e) => e.preventDefault());
         b.addEventListener('click', (e) => {
           if (!e.isTrusted) return;
+          if (it.insecure) { confirmInsecure(it.id, field); return; }
           closePanel();
           fillItem(it.id, field);
         });
@@ -253,11 +260,46 @@
     positionPanel();
   }
 
+  /**
+   * The insecure-page warning: the login was saved for https and this page is plain http, so
+   * anyone on the network can read what is filled. Filling needs a real click on "Fill anyway",
+   * which is the only way allowInsecure is ever sent.
+   */
+  function confirmInsecure(id, field) {
+    closePanel();
+    if (!field || !field.isConnected) return;
+    panelField = field;
+    panel = el('div', 'panel');
+    panel.setAttribute('role', 'alertdialog');
+    panel.setAttribute('aria-label', 'This page is not secure');
+    panel.append(el('div', 'head', 'Not secure'),
+      el('div', 'note', 'This login was saved for https, but this page is plain http: anyone on the network can read what you fill in.'));
+    const actions = el('div', 'actions');
+    const cancel = el('button', 'btn', 'Cancel');
+    const go = el('button', 'btn danger', 'Fill anyway');
+    cancel.type = go.type = 'button';
+    for (const b of [cancel, go]) b.addEventListener('mousedown', (e) => e.preventDefault());
+    cancel.addEventListener('click', (e) => { if (e.isTrusted) closePanel(); });
+    go.addEventListener('click', (e) => {
+      if (!e.isTrusted) return;
+      closePanel();
+      fillItem(id, field, true);
+    });
+    actions.append(cancel, go);
+    panel.append(actions);
+    ui().append(panel);
+    positionPanel();
+    cancel.focus();
+  }
+
   function explain(err) {
     switch (err?.code) {
       case 'host_missing': return 'The Raypass native host is not installed. See the extension options.';
       case 'unavailable': return 'Sol is not running.';
-      case 'forbidden': return err.message === 'locked' ? 'Raypass is locked.' : 'Raypass does not fill here.';
+      case 'forbidden':
+        if (err.message === 'locked') return 'Raypass is locked.';
+        if (err.message === 'insecure page') return 'This page is not secure: Raypass did not fill it.';
+        return 'Raypass does not fill here.';
       case 'not_installed': return 'Raypass is not installed in Sol.';
       default: return err?.message || 'Raypass is not available.';
     }
@@ -271,11 +313,18 @@
   /** value we filled -> field, so a login we filled is not offered for saving again. */
   const filledByUs = new WeakMap();
 
-  async function fillItem(id, field) {
+  async function fillItem(id, field, allowInsecure) {
     scan();
     const target = F.resultFor(found, field || document.activeElement);
     if (!target) return { filled: [], error: { code: 'not_found', message: 'no login form here' } };
-    const r = await ask({ type: 'cs.fill', id });
+    const m = { type: 'cs.fill', id };
+    if (allowInsecure === true) m.allowInsecure = true;
+    const r = await ask(m);
+    if (!r.ok && r.error?.code === 'forbidden' && r.error?.message === 'insecure page' && !allowInsecure) {
+      // From the shortcut or the context menu: ask here, next to the field.
+      const f = field && F.iconFields(found).includes(field) ? field : F.iconFields(found)[0];
+      if (f) { confirmInsecure(id, f); return { filled: [], error: r.error }; }
+    }
     if (!r.ok) { toast(explain(r.error)); return { filled: [], error: r.error }; }
     const filled = F.fill(target, r);
     if (target.password && r.pass) filledByUs.set(target.password, r.pass);
@@ -405,7 +454,7 @@
     switch (m.type) {
       case 'bg.fill':
         if (typeof m.id !== 'string') return false;
-        fillItem(m.id, document.activeElement).then(reply);
+        fillItem(m.id, document.activeElement, m.allowInsecure === true).then(reply);
         return true;
       case 'bg.fillPassword':
         if (typeof m.password !== 'string') return false;

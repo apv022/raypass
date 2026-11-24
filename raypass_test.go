@@ -830,3 +830,49 @@ func TestAutoLockRacesActions(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// A login saved for https offered on a plain http page of the same site: match flags it, fill
+// refuses it unless the client says the person confirmed (allow_insecure).
+func TestInsecurePage(t *testing.T) {
+	e := newEnv(t)
+	call(t, e.a1, "raypass.setup", map[string]any{"password": pw})
+	bank := call(t, e.a1, "raypass.add", map[string]any{"type": "login", "name": "Bank", "user": "me", "pass": "b-pass", "urls": []string{"https://bank.com"}}).obj(t)["id"].(string)
+	plain := call(t, e.a1, "raypass.add", map[string]any{"type": "login", "name": "Router", "user": "admin", "pass": "r-pass", "urls": []string{"http://bank.com"}}).obj(t)["id"].(string)
+
+	rows := call(t, e.a1, "raypass.match", map[string]any{"url": "http://bank.com/login"}).arr(t)
+	insecure := map[string]any{}
+	for _, r := range rows {
+		insecure[r["id"].(string)] = r["insecure"]
+	}
+	if len(rows) != 2 || insecure[bank] != true || insecure[plain] != nil {
+		t.Fatalf("match rows %v", rows)
+	}
+	for _, r := range call(t, e.a1, "raypass.match", map[string]any{"url": "https://bank.com/login"}).arr(t) {
+		if _, has := r["insecure"]; has {
+			t.Fatalf("https page flagged insecure: %v", r)
+		}
+	}
+	if msg := expectErr(t, raw(e.a1, "raypass.fill", map[string]any{"id": bank, "url": "http://bank.com/login"}, opts{}), 403, "forbidden"); msg != "insecure page" {
+		t.Fatal(msg)
+	}
+	if f := call(t, e.a1, "raypass.fill", map[string]any{"id": bank, "url": "http://bank.com/login", "allow_insecure": true}).obj(t); f["pass"] != "b-pass" {
+		t.Fatal("allow_insecure fill")
+	}
+	if f := call(t, e.a1, "raypass.fill", map[string]any{"id": plain, "url": "http://bank.com/login"}).obj(t); f["pass"] != "r-pass" {
+		t.Fatal("a login saved for http fills on http")
+	}
+	if f := call(t, e.a1, "raypass.fill", map[string]any{"id": bank, "url": "https://bank.com/login"}).obj(t); f["pass"] != "b-pass" {
+		t.Fatal("https fill")
+	}
+	// allow_insecure never lets a URL that does not match through.
+	expectErr(t, raw(e.a1, "raypass.fill", map[string]any{"id": bank, "url": "http://evil.com/", "allow_insecure": true}, opts{}), 403, "forbidden")
+}
+
+func TestPurgeDryRunEmptyTrash(t *testing.T) {
+	e := newEnv(t)
+	call(t, e.a1, "raypass.setup", map[string]any{"password": pw})
+	r := raw(e.a1, "raypass.purge", map[string]any{"all_trash": true}, opts{dry: true})
+	if r.code != 200 || !strings.Contains(string(r.body), `"ids":[]`) {
+		t.Fatalf("%d %s", r.code, r.body)
+	}
+}

@@ -9,6 +9,8 @@
 //   - only the top frame, or a frame of the same registrable domain as the top frame, is filled;
 //   - content scripts can only ask for their own frame's matches and fills; every other action
 //     is for the extension's own pages, and only the allowlisted ones;
+//   - a login saved for https is filled into a plain http page only after the person confirmed
+//     the warning (allow_insecure), in the page's own Raypass panel or in the popup;
 //   - nothing calls the vault on its own (no badge counts on navigation): every vault call is
 //     something the person did, so Raypass's auto-lock keeps working.
 import './lib/urlmatch.js';
@@ -187,7 +189,8 @@ async function onSubmitted(sender, user, pass) {
     const rows = await call('raypass.match', { url: sender.url });
     const same = (rows || []).find((r) => (r.user || '') === user);
     if (same) {
-      const cur = await call('raypass.fill', { id: same.id, url: sender.url });
+      // Only compared here, never sent to the page: an http page may check an https login.
+      const cur = await call('raypass.fill', { id: same.id, url: sender.url, allow_insecure: true });
       if (cur.pass === pass) return; // nothing new: no bar
       update = true;
     }
@@ -262,7 +265,10 @@ async function onContent(m, sender) {
     }
     case 'cs.fill': {
       if (!frameAllowed(sender)) throw new RaypassError('forbidden', 'Raypass does not fill this frame');
-      const r = await call('raypass.fill', { id: m.id, url: sender.url });
+      // allowInsecure: the person clicked "Fill anyway" on the insecure-page warning.
+      const args = { id: m.id, url: sender.url };
+      if (m.allowInsecure === true) args.allow_insecure = true;
+      const r = await call('raypass.fill', args);
       return { user: r.user || '', pass: r.pass || '', totp: r.totp || '' };
     }
     case 'cs.username':
@@ -293,7 +299,9 @@ async function onExt(m) {
     case 'ext.fillTab': {
       const tab = await chrome.tabs.get(m.tabId);
       const t = pickFrame(tab);
-      const r = await chrome.tabs.sendMessage(tab.id, { type: 'bg.fill', id: m.id }, { frameId: t.frameId }).catch(() => null);
+      const fill = { type: 'bg.fill', id: m.id };
+      if (m.allowInsecure === true) fill.allowInsecure = true; // confirmed in the popup
+      const r = await chrome.tabs.sendMessage(tab.id, fill, { frameId: t.frameId }).catch(() => null);
       if (!r) throw new RaypassError('not_found', 'no login form on this page');
       if (r.error) throw new RaypassError(r.error.code, r.error.message);
       return r;

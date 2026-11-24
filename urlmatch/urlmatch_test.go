@@ -96,3 +96,29 @@ func TestMatch(t *testing.T) {
 		t.Fatal("host")
 	}
 }
+
+func TestInsecure(t *testing.T) {
+	cases := []struct {
+		urls []string
+		page string
+		want bool
+	}{
+		{[]string{"https://bank.com"}, "http://bank.com/login", true},
+		{[]string{"bank.com"}, "http://www.bank.com/", true}, // no scheme means https
+		{[]string{"https://bank.com"}, "http://login.bank.com/", true},
+		{[]string{"https://bank.com"}, "https://bank.com/login", false},
+		{[]string{"http://bank.com"}, "http://bank.com/login", false},
+		{[]string{"https://bank.com", "http://bank.com"}, "http://bank.com/", false},
+		{[]string{"https://other.com"}, "http://bank.com/", false}, // no match at all
+		{[]string{"https://bank.com", "https://other.com"}, "http://bank.com/", true},
+		{[]string{"http://localhost:8080"}, "http://localhost:8080/", false},
+		{[]string{"https://localhost:8080"}, "http://localhost:8080/", true},
+		{nil, "http://bank.com/", false},
+		{[]string{"https://bank.com"}, "ftp://bank.com", false},
+	}
+	for _, c := range cases {
+		if got := Insecure(c.urls, c.page); got != c.want {
+			t.Errorf("Insecure(%q, %q) = %v, want %v", c.urls, c.page, got, c.want)
+		}
+	}
+}

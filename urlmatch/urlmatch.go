@@ -6,6 +6,8 @@
 // public suffixes, else the last two labels) are equal; for IP addresses and localhost, host
 // and port must be equal. Any other scheme matches only the same scheme, host and port (so
 // javascript://bank.com/ is not bank.com). Android apps are androidapp://<package> and match exactly.
+// A login saved with an https URL that matches an http page is Insecure: clients warn before
+// filling it.
 //
 // Invariant: matching is pure string work; nothing is fetched from the network.
 package urlmatch
@@ -170,6 +172,29 @@ func Match(saved, page string) int {
 
 // web reports the schemes of web pages, which match by registrable domain.
 func web(scheme string) bool { return scheme == "http" || scheme == "https" }
+
+// Insecure reports whether page is a plain http page that urls match only through https URLs:
+// a login saved for a secure site, offered on an insecure page of the same site, where anyone on
+// the network can read what is typed. A login that also has a matching http URL was saved for
+// the insecure page on purpose, so it is not reported.
+func Insecure(urls []string, page string) bool {
+	p, ok := Parse(page)
+	if !ok || p.Scheme != "http" {
+		return false
+	}
+	secure := false
+	for _, raw := range urls {
+		if Match(raw, page) == 0 {
+			continue
+		}
+		u, _ := Parse(raw)
+		if u.Scheme != "https" {
+			return false
+		}
+		secure = true
+	}
+	return secure
+}
 
 // Best is the best Match of any of urls against page.
 func Best(urls []string, page string) int {

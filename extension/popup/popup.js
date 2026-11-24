@@ -185,19 +185,45 @@ function itemRow(it, { fill, passFor }) {
   meta.append(h('div', 'name', it.name || '(no name)'), sub);
   li.append(meta);
   const acts = h('div', 'acts');
+  // A login saved for https on a plain http page (raypass.match says insecure): its password
+  // leaves the vault for this page only after a second, explicit click on "… anyway".
+  let confirmed = !(fill && it.insecure);
+  const warn = () => {
+    meta.append(h('div', 'warn', 'Not secure: this page is http, the login was saved for https. Anyone on the network can read what you fill in.'));
+  };
+  if (!confirmed) meta.append(h('div', 'warn', 'Not secure: saved for https'));
+  const guarded = (label, title, run, cls) => {
+    const b = button(label, title, async () => {
+      if (!confirmed) {
+        if (b.dataset.armed !== '1') {
+          b.dataset.armed = '1';
+          b.textContent = label + ' anyway';
+          b.className = 'btn danger';
+          meta.querySelector('.warn')?.remove();
+          warn();
+          return;
+        }
+        confirmed = true;
+      }
+      await run();
+    }, cls);
+    return b;
+  };
   if (it.type === 'login' || !it.type) {
     if (it.user) acts.append(button('User', 'Copy the username', () => copy(it.user, 'Username', false)));
-    acts.append(button('Pass', 'Copy the password', async () => {
+    acts.append(guarded('Pass', 'Copy the password', async () => {
       try {
-        const p = await passFor(it);
+        const p = await passFor(it, confirmed);
         if (p) await copy(p, 'Password', true); else toast('No password saved');
       } catch (e) { toast(e.message); }
     }));
     if (it.has_totp) acts.append(totpButton(it.id, sub));
     if (fill) {
-      acts.append(button('Fill', 'Fill this login into the page', async () => {
+      acts.append(guarded('Fill', 'Fill this login into the page', async () => {
         try {
-          await send({ type: 'ext.fillTab', tabId: tab.id, id: it.id });
+          const m = { type: 'ext.fillTab', tabId: tab.id, id: it.id };
+          if (it.insecure) m.allowInsecure = true; // reached only after the confirm click
+          await send(m);
           window.close();
         } catch (e) { toast(e.message); }
       }, 'btn primary'));
@@ -222,7 +248,12 @@ async function loadMatches() {
   }
   const rows = await api('raypass.match', { url: tab.url });
   // fill takes the tab's URL as the browser reports it; the vault refuses a URL that does not match.
-  const passFor = async (it) => (await api('raypass.fill', { id: it.id, url: tab.url })).pass;
+  // allow is true only for an insecure row the person confirmed (itemRow's guarded buttons).
+  const passFor = async (it, allow) => {
+    const args = { id: it.id, url: tab.url };
+    if (allow && it.insecure) args.allow_insecure = true;
+    return (await api('raypass.fill', args)).pass;
+  };
   for (const it of rows || []) list.append(itemRow(it, { fill: true, passFor }));
   if (!rows?.length) {
     $('matches-empty').textContent = 'No logins for this site.';
