@@ -2,3 +2,4 @@ bin/
 build/
 *.apk
 /android/build/
+/dist/

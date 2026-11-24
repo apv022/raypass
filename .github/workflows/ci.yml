@@ -1,0 +1,26 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: make check (gofmt, vet on Linux/Windows/macOS, go test -race)
+        run: make check
+      - name: Android toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q aapt zipalign apksigner
+          android/toolchain.sh
+      - name: Android tests and build
+        run: |
+          android/test.sh
+          android/build.sh

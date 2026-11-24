@@ -1,0 +1,69 @@
+# Push a tag vX.Y.Z (or vX.Y.Z-beta.N, published as a pre-release) to build and publish every
+# Raypass binary: desktop app + native host for Linux/macOS/Windows on amd64/arm64, the browser
+# extension zips, the Android APK and SHA256SUMS. The tag's version must equal app.json's and
+# extension/manifest.json's (scripts/release.sh checks).
+#
+# Android signing: set the repository secrets RAYPASS_KEYSTORE_B64 (base64 of a PKCS12 keystore),
+# RAYPASS_KEY_ALIAS and RAYPASS_KEYSTORE_PASS to sign with your release key. Without them the APK
+# is signed with a throwaway key made for that run and named *-debugkey.apk.
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      HAS_KEY: ${{ secrets.RAYPASS_KEYSTORE_B64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Android toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q aapt zipalign apksigner
+          android/toolchain.sh
+      - name: Checks
+        run: |
+          make check
+          android/test.sh
+      - name: Release key
+        if: env.HAS_KEY == 'true'
+        env:
+          KS: ${{ secrets.RAYPASS_KEYSTORE_B64 }}
+        run: |
+          umask 077
+          printf '%s' "$KS" | base64 -d > "$RUNNER_TEMP/release.p12"
+          echo "RAYPASS_KEYSTORE=$RUNNER_TEMP/release.p12" >> "$GITHUB_ENV"
+      - name: Build
+        env:
+          RAYPASS_KEY_ALIAS: ${{ secrets.RAYPASS_KEY_ALIAS }}
+          RAYPASS_KEYSTORE_PASS: ${{ secrets.RAYPASS_KEYSTORE_PASS }}
+        run: scripts/release.sh "$GITHUB_REF_NAME"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          pre=""; case "$v" in *-*) pre=--prerelease;; esac
+          apk=$(cd dist && ls raypass-*.apk)
+          {
+            echo "## Raypass $v"
+            echo
+            echo "Password manager for [Sol](https://github.com/apv022/sol): logins, secure notes, crypto wallets, cards, identities, TOTP, generator, autofill. The vault syncs between your devices as ciphertext only."
+            echo
+            echo "| File | What |"
+            echo "|---|---|"
+            echo "| \`raypass-$v-<os>-<arch>.tar.gz/.zip\` | desktop: \`raypass-app/\` for \`sol app install\`, plus \`raypass-native\` for the browser extension (see INSTALL.txt inside) |"
+            echo "| \`raypass-extension-$v-chrome.zip\` | Chrome, Brave, Edge, Vivaldi (load unpacked from the unzipped folder) |"
+            echo "| \`raypass-extension-$v-firefox.zip\` | Firefox (about:debugging → Load Temporary Add-on, or sign it on AMO) |"
+            echo "| \`$apk\` | Android 8+ (needs the Sol Android app; then Settings → Autofill service → Raypass) |"
+            echo "| \`SHA256SUMS\` | checksums |"
+            echo
+            case "$apk" in *debugkey*) echo "> The APK is signed with a throwaway key made for this build, so a later release can't install over it: uninstall first and reconnect Raypass to Sol. Releases signed with a stable key need the RAYPASS_KEYSTORE_* repository secrets.";; esac
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Raypass $v" --notes-file "$RUNNER_TEMP/notes.md" $pre

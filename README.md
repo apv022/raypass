@@ -58,7 +58,21 @@ The contract (crypto format, item model, actions, extension and Android protocol
 
 The threat model is spelled out in [design/DESIGN.md](design/DESIGN.md).
 
-## Install on a desktop
+## Download
+
+Prebuilt binaries are on the [Releases page](https://github.com/apv022/raypass/releases): the
+desktop app and native host for Linux, macOS and Windows (amd64 and arm64), the browser extension
+for Chrome-family browsers and Firefox, the Android APK, and `SHA256SUMS`. Unpack the archive for
+your platform and follow its `INSTALL.txt` (`sol app install raypass-app`, then
+`raypass-native install` for the extension).
+
+Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed (a tag with a
+`-suffix` is published as a pre-release); `scripts/release.sh 0.1.0` builds the same files into
+`dist/` locally. To sign the APK with a stable key, set the repository secrets
+`RAYPASS_KEYSTORE_B64` (base64 of a PKCS12 keystore), `RAYPASS_KEY_ALIAS` and
+`RAYPASS_KEYSTORE_PASS`. Sol binds Raypass to the APK's signing certificate, so keep that key.
+
+## Build and install on a desktop
 
 You need Go 1.26 or later and Sol running on the machine.
 
