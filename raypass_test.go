@@ -422,6 +422,19 @@ func TestDryRunChangesNothing(t *testing.T) {
 	}
 }
 
+// A dry-run unlock checks the password like the real call (DESIGN.md: dry runs validate exactly
+// as the real call would) and stays locked either way.
+func TestDryRunUnlockChecksPassword(t *testing.T) {
+	e := newEnv(t)
+	call(t, e.a1, "raypass.setup", map[string]any{"password": pw})
+	call(t, e.a1, "raypass.lock", nil)
+	expectErr(t, raw(e.a1, "raypass.unlock", map[string]any{"password": "wrong password"}, opts{dry: true}), 401, "unauthorized")
+	r := raw(e.a1, "raypass.unlock", map[string]any{"password": pw}, opts{dry: true})
+	if r.code != 200 || r.obj(t)["dry_run"] != true || e.a1.unlocked() {
+		t.Fatalf("dry-run unlock: %d %s", r.code, r.body)
+	}
+}
+
 func TestFeedsHoldNoPlaintext(t *testing.T) {
 	e := newEnv(t)
 	call(t, e.a1, "raypass.setup", map[string]any{"password": pw})

@@ -218,15 +218,15 @@ func (a *App) actUnlock(ctx context.Context, c sol.Call) (any, error) {
 	if err := decode(c, &in); err != nil {
 		return nil, err
 	}
-	if c.DryRun {
-		if !a.keyring().OK {
-			return nil, sol.Errorf("not_found", "there is no vault yet: set one up with raypass.setup")
-		}
-		return dry(map[string]any{"unlock": true}), nil
-	}
+	// A dry run checks the password too (with the same backoff), as DESIGN.md asks dry runs to
+	// validate exactly as the real call would: "would unlock" for a wrong password is a lie.
 	vk, kr, err := a.checkPassword(ctx, in.Password)
 	if err != nil {
 		return nil, err
+	}
+	if c.DryRun {
+		vault.Wipe(vk)
+		return dry(map[string]any{"unlock": true}), nil
 	}
 	a.open(vk, kr.ID)
 	return ok(), nil
