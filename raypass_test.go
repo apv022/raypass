@@ -762,7 +762,7 @@ func TestManifestMatchesDesign(t *testing.T) {
 			t.Errorf("%s changes the vault but agents need no approval", s.Name)
 		}
 	}
-	if len(m.Actions) != 22 {
+	if len(m.Actions) != 23 {
 		t.Fatalf("%d actions", len(m.Actions))
 	}
 }

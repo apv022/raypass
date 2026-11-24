@@ -82,8 +82,9 @@ a broken or stray write can neither lock the person out nor make a device write 
 another key.
 If entries with **different** `id`s exist (two devices set up a vault while offline), the one
 with the smallest stamp wins and Raypass refuses to set up again; the other vault's items are
-reported by `raypass.status` as `orphaned` (not readable) – we never silently lose them: its
-entries stay in the feed.
+reported by `raypass.status` as `orphaned` (not readable; `orphaned_keyrings` lists the other
+vaults' keyring ids) – we never silently lose them: its entries stay in the feed, and
+`raypass.recover` with the other vault's master password copies its items into this vault.
 
 ### Vault entries
 
@@ -182,7 +183,7 @@ locked. Secrets are only in outputs of actions marked **reveals**; those are `ap
 
 | Action | Effect | Input | Output |
 |---|---|---|---|
-| `raypass.status` | read | – | `{"initialized","locked","items","trash","orphaned","auto_lock","clip_clear","kdf_iter","locks_in"}` |
+| `raypass.status` | read | – | `{"initialized","locked","items","trash","orphaned","orphaned_keyrings","auto_lock","clip_clear","kdf_iter","locks_in"}` |
 | `raypass.setup` | write, agents | `password` | `{"ok":true}` (unlocked) |
 | `raypass.unlock` | write, agents | `password` | `{"ok":true}` |
 | `raypass.lock` | write | – | `{"ok":true}` |
@@ -204,6 +205,7 @@ locked. Secrets are only in outputs of actions marked **reveals**; those are `ap
 | `raypass.export` | read, vault, **reveals** | `format` (`json`,`csv`,`encrypted`), `password` (for encrypted) | `{"data","filename"}` |
 | `raypass.import` | write, vault, agents | `format` (`auto`,`bitwarden_json`,`bitwarden_csv`,`chrome_csv`,`firefox_csv`,`1password_csv`,`keepass_csv`,`lastpass_csv`,`raypass_json`,`raypass_encrypted`), `data`, `password?` | `{"imported": n, "skipped": n, "format"}` (`format` is the detected one; exact duplicates of items already in the vault, and Raypass JSON ids already present, are skipped) |
 | `raypass.settings` | write, vault, agents | `auto_lock?`, `clip_clear?` | the settings |
+| `raypass.recover` | write, vault, agents | `password` (the orphaned vault's master password), `keyring?` (one of `orphaned_keyrings`) | `{"recovered": n, "skipped": n}`: the orphaned vault's entries are decrypted with its own key and its live items re-added here with new ids; exact duplicates of live items are skipped, so running it twice adds nothing. Wrong password: `unauthorized` (counts toward the unlock backoff); no such orphaned vault: `not_found` |
 
 All write actions honour `Sol-Dry-Run: 1` (describe, change nothing): they validate exactly as
 the real call would and answer `{"dry_run": true, "would": {...}}`, which names fields but never
@@ -219,7 +221,9 @@ Notes fixed by the Go implementation (the table above is authoritative for shape
   backoff counts failures of both, per Raypass process, in memory.
 - `raypass.status` while locked reports `items` and `trash` as 0, and the settings last seen
   unlocked (defaults before that). `orphaned` counts vault entries under another keyring id, plus
-  (while unlocked) entries of this vault that failed to decrypt.
+  (while unlocked) entries of this vault that failed to decrypt; it stays non-zero after
+  `raypass.recover` (the entries are never removed). `orphaned_keyrings` is `[]` when there are
+  none. The web UI's Settings shows "Recover items from another vault" while it is non-empty.
 - `list`/`match` rows: `user` is the login's user, a card's holder, or an identity's
   "first last". `fill` works on logins not in the trash only.
 - Errors for unknown items are `not_found`; bad input `bad_request`.

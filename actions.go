@@ -94,6 +94,7 @@ func (a *App) registerActions(act *sol.Actions) {
 	vh("raypass.export", a.actExport)
 	vh("raypass.import", a.actImport)
 	vh("raypass.settings", a.actSettings)
+	vh("raypass.recover", a.actRecover)
 }
 
 func decode(c sol.Call, v any) error {
@@ -122,9 +123,13 @@ func (a *App) actStatus(_ context.Context, _ sol.Call) (any, error) {
 	a.mu.Unlock()
 	out := map[string]any{"initialized": kr.OK, "locked": locked, "items": 0, "trash": 0, "orphaned": 0,
 		"auto_lock": settings.AutoLock, "clip_clear": settings.ClipClear, "kdf_iter": 0, "locks_in": a.locksIn()}
+	out["orphaned_keyrings"] = []string{}
 	if kr.OK {
 		out["kdf_iter"] = kr.Current.KDF.Iter
 		out["orphaned"] = a.orphaned(kr.Current.ID)
+		if kr.Others != nil {
+			out["orphaned_keyrings"] = kr.Others
+		}
 	}
 	if !locked {
 		n, t := 0, 0
@@ -195,11 +200,8 @@ func (a *App) actSetup(ctx context.Context, c sol.Call) (any, error) {
 func (a *App) checkPassword(ctx context.Context, password string) ([]byte, vault.Keyring, error) {
 	a.unlockMu.Lock()
 	defer a.unlockMu.Unlock()
-	if n := a.failures; n >= 5 {
-		d := time.Second << min(n-5, 6)
-		if err := a.sleep(ctx, min(d, 60*time.Second)); err != nil {
-			return nil, vault.Keyring{}, sol.Errorf("unavailable", "cancelled")
-		}
+	if err := a.backoffLocked(ctx); err != nil {
+		return nil, vault.Keyring{}, err
 	}
 	kr := a.keyring()
 	if !kr.OK {
@@ -215,6 +217,18 @@ func (a *App) checkPassword(ctx context.Context, password string) ([]byte, vault
 	}
 	a.failures = 0
 	return vk, kr.Current, nil
+}
+
+// backoffLocked waits as design/DESIGN.md says after 5 failed password checks in a row.
+// a.unlockMu held.
+func (a *App) backoffLocked(ctx context.Context) error {
+	if n := a.failures; n >= 5 {
+		d := time.Second << min(n-5, 6)
+		if err := a.sleep(ctx, min(d, 60*time.Second)); err != nil {
+			return sol.Errorf("unavailable", "cancelled")
+		}
+	}
+	return nil
 }
 
 func (a *App) actUnlock(ctx context.Context, c sol.Call) (any, error) {
@@ -935,4 +949,140 @@ func (a *App) actSettings(ctx context.Context, c sol.Call, st *vault.State) (any
 	}
 	a.touch() // re-arm auto-lock with the new value
 	return st.Settings(), nil
+}
+
+// ---------- orphaned vault recovery ----------
+
+// actRecover brings the items of an orphaned vault into this one (design/DESIGN.md "Vault key
+// and the keyring": two devices set up a vault while offline; the later one's entries stay in
+// the feed, unreadable with this vault's key). With that vault's own master password it
+// decrypts its entries with its own key, folds them, and re-adds its live items here under new
+// ids, skipping exact duplicates of live items (so running it twice adds nothing). The other
+// vault's entries are left as they are; its key is wiped when done.
+func (a *App) actRecover(ctx context.Context, c sol.Call, st *vault.State) (any, error) {
+	var in struct {
+		Password string `json:"password"`
+		Keyring  string `json:"keyring"`
+	}
+	if err := decode(c, &in); err != nil {
+		return nil, err
+	}
+	if in.Keyring != "" && !vault.ValidID(in.Keyring) {
+		return nil, bad("keyring must be a keyring id (16 hex characters)")
+	}
+	if in.Password == "" {
+		return nil, bad("password is empty: give the other vault's master password")
+	}
+	ids := a.keyring().Others
+	if in.Keyring != "" {
+		found := false
+		for _, id := range ids {
+			found = found || id == in.Keyring
+		}
+		if !found {
+			return nil, sol.Errorf("not_found", "no orphaned vault with that keyring id")
+		}
+		ids = []string{in.Keyring}
+	}
+	if len(ids) == 0 {
+		return nil, sol.Errorf("not_found", "there is no orphaned vault to recover")
+	}
+	vk, kid, err := a.unwrapOrphan(ctx, ids, in.Password)
+	if err != nil {
+		return nil, err
+	}
+	defer vault.Wipe(vk)
+
+	// Fold the other vault on its own, with a throwaway clock (nothing is written under it).
+	other := vault.NewState(crdt.NewClock(a.dev))
+	defer other.Wipe()
+	a.mu.Lock()
+	ents := append([]vault.Entry(nil), a.ents...)
+	a.mu.Unlock()
+	for _, e := range ents {
+		if e.K != kid {
+			continue
+		}
+		ops, err := e.Decrypt(vk)
+		if err != nil {
+			continue // damaged: nothing to recover from it
+		}
+		other.Apply(ops)
+	}
+
+	seen := map[string]bool{}
+	for _, it := range st.Items() {
+		if it.Trashed == 0 {
+			seen[dupKey(it)] = true
+		}
+	}
+	var ops []crdt.MapOp
+	recovered, skipped := 0, 0
+	now := a.nowMs()
+	for _, it := range other.Items() {
+		if it.Trashed != 0 {
+			continue
+		}
+		k := dupKey(it)
+		if seen[k] {
+			skipped++
+			continue
+		}
+		_, iops, err := st.AddWithID(vault.NewID(), it.Type, it.Input(), now)
+		if err != nil {
+			skipped++
+			continue
+		}
+		seen[k] = true
+		ops = append(ops, iops...)
+		recovered++
+	}
+	out := map[string]any{"recovered": recovered, "skipped": skipped}
+	if c.DryRun {
+		return dry(out), nil
+	}
+	if err := a.appendOps(ctx, ops); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// unwrapOrphan finds which of the orphaned vaults ids the password opens and returns its key.
+// Each vault's current keyring is chosen the way ChooseKeyring chooses ours. A wrong password
+// counts as one failure of the unlock backoff, however many vaults it was tried on.
+func (a *App) unwrapOrphan(ctx context.Context, ids []string, password string) ([]byte, string, error) {
+	a.unlockMu.Lock()
+	defer a.unlockMu.Unlock()
+	if err := a.backoffLocked(ctx); err != nil {
+		return nil, "", err
+	}
+	a.mu.Lock()
+	rings := append([]vault.Keyring(nil), a.rings...)
+	a.mu.Unlock()
+	damaged := false
+	for _, id := range ids {
+		var mine []vault.Keyring
+		for _, kr := range rings {
+			if kr.ID == id {
+				mine = append(mine, kr)
+			}
+		}
+		ch := vault.ChooseKeyring(mine, a.cfg.MinIter)
+		if !ch.OK {
+			continue
+		}
+		vk, err := ch.Current.Unwrap(password)
+		switch {
+		case err == nil:
+			a.failures = 0
+			return vk, id, nil
+		case !errors.Is(err, vault.ErrWrongPassword):
+			damaged = true
+		}
+	}
+	if damaged && len(ids) == 1 {
+		return nil, "", sol.Errorf("conflict", "the other vault's keyring is damaged")
+	}
+	a.failures++
+	return nil, "", sol.Errorf("unauthorized", "wrong password for the other vault")
 }

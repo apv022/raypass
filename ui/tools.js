@@ -150,6 +150,10 @@ function drawSettings(focus) {
   render($('tool'), html`${toolBar('Settings')}
     <div class="t-scroll"><div class="t-col">
       ${st.orphaned ? html`<div class="banner warn-banner">${svg('shield', 18)}<span>${st.orphaned} entries from another vault (set up on another device while offline) can't be read with this vault's key. They are kept, not deleted.</span></div>` : ''}
+      ${st.orphaned_keyrings?.length ? html`<h3 class="group-title">Another vault</h3>
+      <div class="group">
+        <div class="opt"><span class="opt-text">Recover items from another vault<small>With that vault's master password. Its items are copied into this vault; ones already here are skipped.</small></span><button type="button" data-s="recover"><sol-icon name="download"></sol-icon>Recover…</button></div>
+      </div>` : ''}
       <h3 class="group-title">Security</h3>
       <div class="group">
         <label class="opt"><span class="opt-text">Lock after<small>Without any use, on every device</small></span><select data-set="auto_lock">${opt(AUTO_LOCK, st.auto_lock ?? 15, 'min')}</select></label>
@@ -240,6 +244,20 @@ async function doImport(file) {
   } catch (e) { fail(e); }
 }
 
+/** raypass.recover: the orphaned vault's items into this one, with that vault's password. */
+async function doRecover() {
+  const pw = await askPassword('Recover items from another vault',
+    'Enter the master password of the other vault: the one set up on another device while it was offline.', 'Recover');
+  if (pw === null) return;
+  try {
+    const r = await rp('recover', { password: pw });
+    hooks.toast(r.recovered ? `Recovered ${r.recovered} item${r.recovered === 1 ? '' : 's'}${r.skipped ? `, ${r.skipped} already here` : ''}` : 'Nothing new to recover');
+    await hooks.refresh();
+  } catch (e) {
+    if (e?.code === 'unauthorized') hooks.toast('That is not the other vault\'s password.', 'error'); else fail(e);
+  }
+}
+
 async function changePassword(f) {
   const err = f.querySelector('.form-err');
   err.textContent = '';
@@ -289,6 +307,7 @@ function wireSettings(root) {
     if (s.dataset.s === 'lock') lockNow();
     if (s.dataset.s === 'pick') $('imp-file').click();
     if (s.dataset.s === 'export') doExport();
+    if (s.dataset.s === 'recover') doRecover();
   });
   root.addEventListener('submit', (e) => { if (e.target.id === 'pwchange') { e.preventDefault(); changePassword(e.target); } });
 }

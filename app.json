@@ -9,7 +9,7 @@
   "scopes": ["feeds", "actions"],
   "runs_on": ["any"],
   "actions": [
-    {"name": "raypass.status", "description": "Whether a vault exists and is locked, item and trash counts, orphaned entries, settings and the KDF round count. No secrets.",
+    {"name": "raypass.status", "description": "Whether a vault exists and is locked, item and trash counts, orphaned entries and the keyring ids of orphaned vaults (orphaned_keyrings, see raypass.recover), settings, the KDF round count and locks_in. No secrets.",
      "input": {"type": "object"}, "effect": "read"},
     {"name": "raypass.setup", "description": "Create the vault with a master password (at least 8 characters). Refused if one exists. Leaves the vault unlocked.",
      "input": {"type": "object", "required": ["password"], "properties": {"password": {"type": "string"}}}, "effect": "write", "approval": "agents"},
@@ -55,6 +55,8 @@
     {"name": "raypass.import", "description": "Import another manager's export (data is the file's text). format: auto, bitwarden_json, bitwarden_csv, chrome_csv, firefox_csv, 1password_csv, keepass_csv, lastpass_csv, raypass_json, raypass_encrypted (needs password). Exact duplicates are skipped.",
      "input": {"type": "object", "required": ["data"], "properties": {"format": {"type": "string", "enum": ["auto", "bitwarden_json", "bitwarden_csv", "chrome_csv", "firefox_csv", "1password_csv", "keepass_csv", "lastpass_csv", "raypass_json", "raypass_encrypted"]}, "data": {"type": "string"}, "password": {"type": "string"}}},
      "effect": "write", "approval": "agents"},
+    {"name": "raypass.recover", "description": "Recover the items of an orphaned vault (set up on another device while offline; raypass.status lists its keyring id in orphaned_keyrings) into this one: password is that vault's master password, keyring optionally picks one. Its live items are added here with new ids; exact duplicates are skipped. Needs this vault unlocked.",
+     "input": {"type": "object", "required": ["password"], "properties": {"password": {"type": "string"}, "keyring": {"type": "string"}}}, "effect": "write", "approval": "agents"},
     {"name": "raypass.settings", "description": "Change synced settings: auto_lock (minutes without use, 0 = never), clip_clear (seconds before a copied secret is cleared). Returns the settings.",
      "input": {"type": "object", "properties": {"auto_lock": {"type": "number"}, "clip_clear": {"type": "number"}}}, "effect": "write", "approval": "agents"}
   ]
