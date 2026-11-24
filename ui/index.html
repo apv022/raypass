@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Raypass</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/kit/tokens.css">
+<link rel="stylesheet" href="/kit/kit.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="app" class="rp" data-mode="boot" data-screen="list">
+  <!-- setup and unlock -->
+  <section id="gate" class="gate" aria-live="polite"></section>
+
+  <!-- the vault: sidebar, list, detail (or a tool spanning list and detail) -->
+  <aside id="side" class="side glass" aria-label="Vault">
+    <div class="side-head">
+      <sol-nav></sol-nav>
+      <div class="brand"><img src="/icon.svg" alt="" width="22" height="22"><span>Raypass</span></div>
+      <button id="lock" class="ghost icon-btn" type="button" aria-label="Lock (Ctrl+L)" title="Lock (Ctrl+L)"><sol-icon name="lock"></sol-icon></button>
+    </div>
+    <div class="side-scroll">
+      <div id="tiles" class="tiles" role="list"></div>
+      <h2 id="folders-title" class="group-title">Folders</h2>
+      <nav id="folders" class="navlist" aria-labelledby="folders-title"></nav>
+      <h2 class="group-title">Tools</h2>
+      <nav id="tools" class="navlist" aria-label="Tools"></nav>
+    </div>
+    <footer class="side-foot">
+      <button id="new" class="primary new-btn" type="button"><sol-icon name="plus"></sol-icon><span>New item</span></button>
+    </footer>
+  </aside>
+
+  <section id="listpane" class="listpane" aria-label="Items">
+    <header class="bar">
+      <button id="back-side" class="plain back" type="button" aria-label="Back to the vault"><sol-icon name="back"></sol-icon><span>Vault</span></button>
+      <h1 id="list-title" class="list-title"></h1>
+      <div class="bar-actions" id="list-actions"></div>
+    </header>
+    <div class="search-wrap"><input id="q" type="search" placeholder="Search" aria-label="Search the vault (/)" autocomplete="off" spellcheck="false"></div>
+    <div id="list-banner" hidden></div>
+    <div id="rows" class="rows" role="listbox" aria-label="Items" tabindex="-1"></div>
+  </section>
+
+  <section id="detail" class="detail" aria-label="Item"></section>
+
+  <section id="tool" class="tool" aria-label="Tool"></section>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
