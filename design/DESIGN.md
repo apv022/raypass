@@ -167,24 +167,45 @@ locked. Secrets are only in outputs of actions marked **reveals**; those are `ap
 | `raypass.lock` | write | – | `{"ok":true}` |
 | `raypass.change_password` | write, agents | `old`, `new`, `iter?` | `{"ok":true}` |
 | `raypass.list` | read, vault | `query?`, `type?`, `folder?`, `fav?`, `trash?` (bool), `url?` | `[{id,type,name,user,urls,folder,fav,tags,has_totp,updated,trashed}]` (no secrets; `user` is shown, it is not a secret here). Sorted: favourites, then name |
-| `raypass.get` | read, vault, **reveals** | `id` | the whole item, all fields |
-| `raypass.add` | write, vault | `type`, `name`, and any fields of the type | `{"id"}` |
-| `raypass.update` | write, vault | `id` + fields to set (`null` clears a field) | `{"id"}` |
-| `raypass.trash` | write, vault | `ids` | `{"trashed": n}` |
-| `raypass.restore` | write, vault | `ids` | `{"restored": n}` |
+| `raypass.get` | read, vault, **reveals** | `id` | the whole item: `id`,`type`,`name`,`folder`,`fav`,`tags`,`notes`,`fields`,`created`,`updated`,`trashed` and every field of its type (`""`/`[]` when unset), so the shape is fixed per type |
+| `raypass.add` | write, vault, agents | `type`, `name`, and any fields of the type | `{"id"}` |
+| `raypass.update` | write, vault, agents | `id` + fields to set (`null` clears a field) | `{"id"}` |
+| `raypass.trash` | write, vault, agents | `ids` | `{"trashed": n}` |
+| `raypass.restore` | write, vault, agents | `ids` | `{"restored": n}` |
 | `raypass.purge` | destructive, vault, agents | `ids` (must be in trash) or `all_trash: true` | `{"purged": n}` |
 | `raypass.generate` | read | `mode` (`chars`/`words`), `length` (chars, 4–128, default 20), `upper`,`lower`,`digits`,`symbols` (bools, default true), `avoid_ambiguous`, `words` (3–20, default 5), `separator` (default `-`), `capitalize`, `number` | `{"password","entropy_bits"}` |
 | `raypass.totp` | read, vault, **reveals** | `id` | `{"code","period","remaining","digits"}` |
 | `raypass.match` | read, vault | `url` | logins whose URLs match (see below), like `list` rows, best match first |
 | `raypass.fill` | read, vault, **reveals** | `id`, `url` | `{"user","pass","totp"?}`; refuses (`forbidden`, "url does not match") unless one of the item's URLs matches `url` |
-| `raypass.save_login` | write, vault | `url`, `user`, `pass`, `name?` | `{"id","created":bool}`; updates the pass of an existing login with the same user and matching URL (history kept), else adds one named after the host |
+| `raypass.save_login` | write, vault, agents | `url`, `user`, `pass`, `name?` | `{"id","created":bool}`; updates the pass of an existing login with the same user and matching URL (history kept), else adds one named after the host |
 | `raypass.folders` | read, vault | – | `[{"name","count"}]` |
 | `raypass.health` | read, vault | – | `{"weak":[ids],"reused":[[ids]],"old":[ids],"score"}` (no secrets) |
 | `raypass.export` | read, vault, **reveals** | `format` (`json`,`csv`,`encrypted`), `password` (for encrypted) | `{"data","filename"}` |
-| `raypass.import` | write, vault | `format` (`auto`,`bitwarden_json`,`bitwarden_csv`,`chrome_csv`,`firefox_csv`,`1password_csv`,`keepass_csv`,`lastpass_csv`,`raypass_json`,`raypass_encrypted`), `data`, `password?` | `{"imported": n, "skipped": n}` |
-| `raypass.settings` | write, vault | `auto_lock?`, `clip_clear?` | the settings |
+| `raypass.import` | write, vault, agents | `format` (`auto`,`bitwarden_json`,`bitwarden_csv`,`chrome_csv`,`firefox_csv`,`1password_csv`,`keepass_csv`,`lastpass_csv`,`raypass_json`,`raypass_encrypted`), `data`, `password?` | `{"imported": n, "skipped": n, "format"}` (`format` is the detected one; exact duplicates of items already in the vault, and Raypass JSON ids already present, are skipped) |
+| `raypass.settings` | write, vault, agents | `auto_lock?`, `clip_clear?` | the settings |
 
-All write actions honour `Sol-Dry-Run: 1` (describe, change nothing).
+All write actions honour `Sol-Dry-Run: 1` (describe, change nothing): they validate exactly as
+the real call would and answer `{"dry_run": true, "would": {...}}`, which names fields but never
+echoes a secret value.
+
+Notes fixed by the Go implementation (the table above is authoritative for shapes):
+
+- Approval: every action that reveals a secret **or changes the vault** is `approval: agents`, as
+  the threat model says (only `raypass.lock` among the writes is not).
+- `raypass.setup` and `raypass.change_password` refuse a new master password shorter than 8
+  characters (`bad_request`). `setup` when a keyring exists: `conflict`. `unlock` or
+  `change_password` with no vault: `not_found`. A wrong (old) password: `unauthorized`; the
+  backoff counts failures of both, per Raypass process, in memory.
+- `raypass.status` while locked reports `items` and `trash` as 0, and the settings last seen
+  unlocked (defaults before that). `orphaned` counts vault entries under another keyring id, plus
+  (while unlocked) entries of this vault that failed to decrypt.
+- `list`/`match` rows: `user` is the login's user, a card's holder, or an identity's
+  "first last". `fill` works on logins not in the trash only.
+- Errors for unknown items are `not_found`; bad input `bad_request`.
+- CSV export uses Bitwarden's CSV layout (most managers read it). It has only logins and notes,
+  so cards, identities and wallets are written as notes with their fields as `name: value` lines
+  in the `fields` column, and a login's extra URLs as `url: …` fields. Nothing is lost.
+- Exports contain the items not in the trash.
 
 ### URL matching
 
