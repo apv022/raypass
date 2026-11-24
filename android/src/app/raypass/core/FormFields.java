@@ -43,6 +43,13 @@ public final class FormFields {
         public boolean editable = true;
         /** The current text (for saves; never logged). */
         public String text;
+        /**
+         * The web domain and scheme of the page or frame the field is in ("" outside web
+         * content): an iframe from another site has its own, see {@link AutofillTarget#resolve}.
+         */
+        public String webDomain = "", webScheme = "";
+        /** Whether the field has input focus (it decides which frame a request is for). */
+        public boolean focused;
 
         /** A field with a platform handle. */
         public Field(Object id) { this.id = id; }
@@ -59,8 +66,8 @@ public final class FormFields {
         /** A one-time-code field. */
         public Field otp;
 
-        /** Reports whether there is anything to fill. */
-        public boolean fillable() { return username != null || password != null; }
+        /** Reports whether there is anything to fill (a login, or a one-time code on its own step). */
+        public boolean fillable() { return username != null || password != null || otp != null; }
 
         /** The fields to fill or save, in order. */
         public List<Field> all() {
@@ -68,6 +75,7 @@ public final class FormFields {
             if (username != null) out.add(username);
             if (password != null) out.add(password);
             if (newPassword != null) out.add(newPassword);
+            if (otp != null) out.add(otp);
             return out;
         }
     }
@@ -101,10 +109,12 @@ public final class FormFields {
         if (ht.equals("hidden") || ht.equals("submit") || ht.equals("button") || ht.equals("checkbox") || ht.equals("radio")
                 || ht.equals("search") || ht.equals("file") || ht.equals("image") || ht.equals("reset")) return Kind.NONE;
         int cls = f.inputType & CLASS_MASK, var = f.inputType & VARIATION_MASK;
+        String words = f.idEntry + " " + f.htmlName + " " + f.htmlId + " " + f.hint;
+        // Before the inputType: code boxes are often numberPassword (a PIN-style input), and an
+        // OTP field taken for the password would get the password filled into it.
+        if (has(words, "otp", "one-time", "2fa", "totp", "verification code", "auth code", "authcode", "mfa")) return Kind.OTP;
         if (cls == CLASS_TEXT && (var == TEXT_PASSWORD || var == TEXT_VISIBLE_PASSWORD || var == TEXT_WEB_PASSWORD)) return Kind.PASSWORD;
         if (cls == CLASS_NUMBER && var == NUMBER_PASSWORD) return Kind.PASSWORD;
-        String words = f.idEntry + " " + f.htmlName + " " + f.htmlId + " " + f.hint;
-        if (has(words, "otp", "one-time", "2fa", "totp", "verification code", "auth code", "authcode", "mfa")) return Kind.OTP;
         if (has(words, "search", "captcha", "coupon", "promo", "zip", "postal", "phone")) return Kind.NONE;
         if (has(words, "password", "passwd", "passcode", "pwd", "pass_", "kennwort", "contraseña", "mot de passe", "mot_de_passe", "senha", "parola")) {
             if (has(words, "new", "confirm", "repeat", "again", "retype")) return Kind.NEW_PASSWORD;

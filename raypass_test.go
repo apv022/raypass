@@ -766,3 +766,67 @@ func TestManifestMatchesDesign(t *testing.T) {
 		t.Fatalf("%d actions", len(m.Actions))
 	}
 }
+
+// Looking is not using: status, generate and lock do not re-arm auto-lock, so a client that
+// shows the lock state (the extension popup, an idle web UI) never keeps the vault open; status
+// says when the vault will lock instead.
+func TestOnlyUseKeepsVaultOpen(t *testing.T) {
+	e := newEnv(t)
+	call(t, e.a1, "raypass.setup", map[string]any{"password": pw})
+	if st := call(t, e.a1, "raypass.status", nil).obj(t); st["locks_in"] != float64(15*60) {
+		t.Fatalf("locks_in after setup: %v", st["locks_in"])
+	}
+	for i := 0; i < 14; i++ {
+		e.clk.advance(time.Minute)
+		call(t, e.a1, "raypass.status", nil)
+		call(t, e.a1, "raypass.generate", nil)
+	}
+	if st := call(t, e.a1, "raypass.status", nil).obj(t); st["locks_in"] != float64(60) {
+		t.Fatalf("locks_in after 14 minutes: %v", st["locks_in"])
+	}
+	e.clk.advance(30 * time.Second)
+	if st := call(t, e.a1, "raypass.status", nil).obj(t); st["locks_in"] != float64(30) || st["locked"] != false {
+		t.Fatalf("locks_in after 14.5 minutes: %v", st)
+	}
+	e.clk.advance(31 * time.Second)
+	if e.a1.unlocked() {
+		t.Fatal("status and generate kept the vault unlocked")
+	}
+	if st := call(t, e.a1, "raypass.status", nil).obj(t); st["locks_in"] != float64(0) || st["locked"] != true {
+		t.Fatalf("status while locked: %v", st)
+	}
+	// Using the vault re-arms it.
+	call(t, e.a1, "raypass.unlock", map[string]any{"password": pw})
+	e.clk.advance(10 * time.Minute)
+	call(t, e.a1, "raypass.list", nil)
+	if st := call(t, e.a1, "raypass.status", nil).obj(t); st["locks_in"] != float64(15*60) {
+		t.Fatalf("locks_in after list: %v", st["locks_in"])
+	}
+	// auto_lock 0: never, and locks_in says 0.
+	call(t, e.a1, "raypass.settings", map[string]any{"auto_lock": 0})
+	if st := call(t, e.a1, "raypass.status", nil).obj(t); st["locks_in"] != float64(0) || st["locked"] != false {
+		t.Fatalf("status with auto_lock 0: %v", st)
+	}
+}
+
+// Exercises the auto-lock timer firing while actions unlock, re-arm it and change the setting
+// (run under -race by make check). The timer now checks and locks in one critical section and
+// no longer reads a.settings without a.mu.
+func TestAutoLockRacesActions(t *testing.T) {
+	e := newEnv(t)
+	call(t, e.a1, "raypass.setup", map[string]any{"password": pw})
+	call(t, e.a1, "raypass.settings", map[string]any{"auto_lock": 1})
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(2)
+		go func() { defer wg.Done(); e.clk.advance(time.Minute) }()
+		go func() {
+			defer wg.Done()
+			raw(e.a1, "raypass.unlock", map[string]any{"password": pw}, opts{})
+			raw(e.a1, "raypass.settings", map[string]any{"auto_lock": 1}, opts{})
+			raw(e.a1, "raypass.list", nil, opts{})
+			raw(e.a1, "raypass.status", nil, opts{})
+		}()
+	}
+	wg.Wait()
+}

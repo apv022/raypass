@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,7 +82,7 @@ func run(ctx context.Context, addr1, addr2 string, empty bool) error {
 		dv := devs[i]
 		bridge := http.StripPrefix("/_sol", memsol.NewServer(n))
 		tok := dv.c.Token()
-		front := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		front := sameOrigin(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.HasPrefix(r.URL.Path, "/_sol/v1/") {
 				r.Header.Set("Authorization", "Bearer "+tok)
 				bridge.ServeHTTP(w, r)
@@ -91,7 +92,7 @@ func run(ctx context.Context, addr1, addr2 string, empty bool) error {
 			r.Header.Set("Sol-Device", dv.d.ID)
 			r.Header.Set("Sol-Self", "1")
 			dv.app.Handler().ServeHTTP(w, r)
-		})
+		}))
 		srv := &http.Server{Addr: addr, Handler: front}
 		servers = append(servers, srv)
 		go func() {
@@ -115,6 +116,33 @@ func run(ctx context.Context, addr1, addr2 string, empty bool) error {
 		_ = s.Close()
 	}
 	return nil
+}
+
+// sameOrigin lets through only requests made to addr by a page of addr. The dev server stamps
+// every request Sol-Self, the way the daemon does for the person's own UI, so without this any
+// website open in the same browser could drive the vault: by a cross-site POST (CSRF) or, with
+// DNS rebinding (a Host that is not ours), even read the answers. The real daemon makes the
+// same checks (Sol's design/API.md section 10).
+func sameOrigin(addr string, h http.Handler) http.Handler {
+	_, port, _ := net.SplitHostPort(addr)
+	hosts := map[string]bool{addr: true, "localhost:" + port: true}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !hosts[r.Host] {
+			http.Error(w, "wrong host", http.StatusForbidden)
+			return
+		}
+		origin := r.Header.Get("Origin")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && origin != "http://"+r.Host {
+			http.Error(w, "cross-origin request refused", http.StatusForbidden)
+			return
+		}
+		navigate := r.Method == http.MethodGet && r.Header.Get("Sec-Fetch-Mode") == "navigate"
+		if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" && !navigate {
+			http.Error(w, "cross-site request refused", http.StatusForbidden)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // do runs an action on a device's app through its handler, as the person's own device.

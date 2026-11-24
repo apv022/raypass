@@ -2,6 +2,7 @@ package app.raypass.test;
 
 import static app.raypass.test.T.*;
 
+import app.raypass.core.AutofillTarget;
 import app.raypass.core.FormFields;
 import app.raypass.core.FormFields.Field;
 import app.raypass.core.FormFields.Kind;
@@ -95,6 +96,36 @@ final class FormFieldsTest {
             Field t = f("t");
             t.inputType = 1;
             check(!FormFields.parse(Arrays.asList(t)).fillable(), "a lone text box is not a login");
+        }});
+        test("autofill: a code box that is a numberPassword is the OTP, not the password", new T.Case() { public void run() {
+            Field o = f("o");
+            o.inputType = 0x12; // NUMBER | NUMBER_VARIATION_PASSWORD
+            o.idEntry = "otp_input";
+            eq(Kind.OTP, FormFields.classify(o), "otp by its id");
+            FormFields.Form form = FormFields.parse(Arrays.asList(o));
+            check(form.fillable() && form.otp == o && form.password == null, "an OTP-only step is fillable");
+            eq(1, form.all().size(), "its field is in all()");
+        }});
+        test("autofill: browsers keep only the focused frame's fields", new T.Case() { public void run() {
+            Field user = f("user"), pass = f("pass"), evil = f("evil");
+            user.webDomain = pass.webDomain = "bank.example";
+            user.inputType = 0x21;
+            pass.inputType = 0x81;
+            evil.webDomain = "ads.example"; // a cross-site iframe on the same page
+            evil.inputType = 0x81;
+            AutofillTarget.Target t = AutofillTarget.resolve("com.android.chrome", Arrays.asList(user, evil, pass));
+            eq("https://bank.example", t.url, "the top page");
+            eq(Arrays.asList(user, pass), t.fields, "the iframe's field is dropped");
+            evil.focused = true;
+            t = AutofillTarget.resolve("com.android.chrome", Arrays.asList(user, evil, pass));
+            eq("https://ads.example", t.url, "the focused frame decides");
+            eq(Arrays.asList(evil), t.fields, "and only its fields are filled");
+            t = AutofillTarget.resolve("com.evil.app", Arrays.asList(user, evil, pass));
+            eq("androidapp://com.evil.app", t.url, "apps are never believed about domains");
+            eq(3, t.fields.size(), "an app's fields are its own");
+            Field urlBar = f("bar"); // a browser's own screen: no web domain anywhere
+            eq("androidapp://com.android.chrome", AutofillTarget.resolve("com.android.chrome", Arrays.asList(urlBar)).url, "browser UI");
+            check(AutofillTarget.resolve(null, Arrays.asList(user)).url == null, "no package");
         }});
     }
 }

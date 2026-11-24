@@ -63,6 +63,19 @@ func TestMatch(t *testing.T) {
 		{"androidapp://com.example.app", "androidapp://com.example.app2", 0},
 		{"androidapp://com.example", "https://example.com", 0},
 		{"", "https://x.com", 0},
+		// Not web pages: the host alone must not let a login fill.
+		{"https://bank.com", "javascript://bank.com/%0aalert(1)", 0},
+		{"https://bank.com", "ftp://bank.com", 0},
+		{"https://bank.com", "data://bank.com/x", 0},
+		{"https://bank.com", "javascript:alert(1)", 0},
+		{"https://bank.com", "data:text/html,https://bank.com", 0},
+		{"ftp://files.example.com", "ftp://files.example.com/pub", 2},
+		{"ftp://files.example.com", "https://files.example.com", 0},
+		// Userinfo is not the host; trailing dots and case do not matter.
+		{"https://bank.com", "https://bank.com@evil.com/", 0},
+		{"https://bank.com", "https://evil.com@bank.com/", 2},
+		{"https://bank.com", "HTTPS://BANK.COM./login", 2},
+		{"https://bank.com", "https://bank.com.evil.com.", 0},
 	}
 	for _, c := range cases {
 		if got := Match(c.saved, c.page); got != c.want {

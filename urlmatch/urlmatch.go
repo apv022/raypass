@@ -2,9 +2,10 @@
 // (design/DESIGN.md "URL matching").
 //
 // Rules: URLs are normalized (lowercase scheme and host, https when no scheme is given). Two web
-// URLs match when their registrable domains (eTLD+1, from an embedded short list of multi-part
+// (http or https) URLs match when their registrable domains (eTLD+1, from an embedded short list of multi-part
 // public suffixes, else the last two labels) are equal; for IP addresses and localhost, host
-// and port must be equal. Android apps are androidapp://<package> and match exactly.
+// and port must be equal. Any other scheme matches only the same scheme, host and port (so
+// javascript://bank.com/ is not bank.com). Android apps are androidapp://<package> and match exactly.
 //
 // Invariant: matching is pure string work; nothing is fetched from the network.
 package urlmatch
@@ -143,6 +144,15 @@ func Match(saved, page string) int {
 		}
 		return 0
 	}
+	// Registrable-domain matching is for web pages only. A javascript://bank.com/ or
+	// ftp://bank.com URL has bank.com as its host but is not the bank's page: anything not
+	// http(s) on either side matches only the same scheme, host and port.
+	if !web(a.Scheme) || !web(b.Scheme) {
+		if a.Scheme == b.Scheme && a.Host == b.Host && a.Port == b.Port {
+			return 2
+		}
+		return 0
+	}
 	if literal(a.Host) || literal(b.Host) {
 		if a.Host == b.Host && a.Port == b.Port {
 			return 2
@@ -157,6 +167,9 @@ func Match(saved, page string) int {
 	}
 	return 0
 }
+
+// web reports the schemes of web pages, which match by registrable domain.
+func web(scheme string) bool { return scheme == "http" || scheme == "https" }
 
 // Best is the best Match of any of urls against page.
 func Best(urls []string, page string) int {

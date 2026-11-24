@@ -11,6 +11,8 @@ public final class Main {
         UrlMatchTest.register(root);
         VaultTest.register();
         FormFieldsTest.register();
+        SseTest.register();
+        PosSetTest.register();
         GeneratorTest.register(root);
         System.exit(T.runAll() == 0 ? 0 : 1);
     }

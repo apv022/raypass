@@ -41,16 +41,21 @@ export const prefs = {
 
 // ---------- actions ----------
 
-let lastCall = Date.now();
 /**
  * Calls raypass.<name>. A `locked` answer wipes every secret and shows the unlock screen, then
- * rethrows (callers usually ignore it: the screen already says what happened).
+ * rethrows (callers usually ignore it: the screen already says what happened). Every status
+ * answer re-arms the auto-lock check from its `locks_in`.
  */
 export async function rp(name, args) {
-  lastCall = Date.now();
-  armIdle();
   try {
-    return await call('raypass.' + name, args === undefined ? {} : args);
+    const out = await call('raypass.' + name, args === undefined ? {} : args);
+    if (name === 'status') { state.status = out; noteStatus(out); }
+    else if (!NOT_USE.has(name)) {
+      lockAt = 0; // the app re-armed its timer: auto_lock minutes from now
+      if (name === 'settings' && state.status && out) state.status = { ...state.status, ...out };
+    }
+    armIdle();
+    return out;
   } catch (e) {
     if (isLocked(e)) { wipe(); hooks.locked(); }
     throw e;
@@ -76,6 +81,7 @@ export function wipe() {
   state.reveal.clear();
   state.rows = []; state.trash = []; state.loaded = false;
   stopTotp();
+  clearTimeout(idleTimer); idleTimer = 0; lockAt = 0;
   for (const d of document.querySelectorAll('sol-dialog, sol-sheet')) { try { d.close(); } catch { /* not open */ } d.remove(); }
   for (const id of ['detail', 'tool', 'rows']) { const n = document.getElementById(id); if (n) n.replaceChildren(); }
 }
@@ -87,16 +93,44 @@ export async function lockNow() {
   hooks.locked();
 }
 
-// Auto-lock: the app locks itself after s.auto_lock minutes without an action call. This page
-// mirrors that for itself (a timer from its own last call, re-armed on each call, never a
-// poll): when it fires, the page locks, wiping what it shows.
+// Auto-lock: the app locks itself after s.auto_lock minutes without use, for every client at
+// once; raypass.status says how many seconds are left (`locks_in`, and status itself does not
+// count as use). This page never locks the vault on its own idleness (another client, such as
+// the browser extension, may be using it): it arms one timer for the moment the app will lock,
+// then asks status once. Locked: it wipes and shows the unlock screen. Not locked (someone used
+// the vault meanwhile): it re-arms from the new `locks_in`. One check per lock deadline, never a
+// poll.
 let idleTimer = 0;
-/** Re-arms the idle timer from the auto-lock setting. */
+let lockAt = 0; // ms timestamp when the app will auto-lock, 0 = unknown or never
+/** Actions that do not count as use of the vault (the app does not re-arm auto-lock for them). */
+const NOT_USE = new Set(['status', 'generate', 'lock']);
+
+/** Records the lock deadline from a raypass.status answer. */
+function noteStatus(s) {
+  lockAt = s && !s.locked && s.locks_in > 0 ? Date.now() + s.locks_in * 1000 : 0;
+}
+
+/** Re-arms the auto-lock check from the last known deadline (or the setting, before one is known). */
 export function armIdle() {
   clearTimeout(idleTimer);
-  const min = state.status?.auto_lock;
-  if (!min || state.status?.locked || !state.status?.initialized) return;
-  idleTimer = setTimeout(() => { if (Date.now() - lastCall >= min * 60e3 - 1000) lockNow(); else armIdle(); }, Math.max(1000, lastCall + min * 60e3 - Date.now()));
+  idleTimer = 0;
+  const s = state.status;
+  if (!s || s.locked || !s.initialized || !s.auto_lock) { lockAt = 0; return; }
+  if (!lockAt) lockAt = Date.now() + s.auto_lock * 60e3;
+  idleTimer = setTimeout(checkLocked, Math.max(1000, lockAt - Date.now() + 500));
+}
+
+async function checkLocked() {
+  idleTimer = 0;
+  let s;
+  try { s = await call('raypass.status', {}); } catch (e) {
+    if (isLocked(e)) { wipe(); hooks.locked(); }
+    return;
+  }
+  state.status = s;
+  noteStatus(s);
+  if (s.locked) { wipe(); hooks.locked(); return; }
+  armIdle();
 }
 
 // ---------- TOTP timer (one at a time, for the item on screen) ----------

@@ -1,7 +1,9 @@
 package app.raypass.core;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -38,5 +40,46 @@ public final class AutofillTarget {
             return scheme + "://" + webDomain.trim().toLowerCase(Locale.ROOT);
         }
         return "androidapp://" + pkg;
+    }
+
+    /** What one autofill request is for: the URL to match and the fields that belong to it. */
+    public static final class Target {
+        /** The URL logins are matched against (null: nothing to do). */
+        public final String url;
+        /** The fields of that URL's page or frame, in traversal order. */
+        public final List<FormFields.Field> fields;
+
+        Target(String url, List<FormFields.Field> fields) {
+            this.url = url;
+            this.fields = fields;
+        }
+    }
+
+    /**
+     * Picks the URL and the fields of one request. In a known browser the web domain is that of
+     * the focused field's frame (else the first one in the structure, the top page) and only fields
+     * of that same frame are kept: a login page can embed an iframe from another site, and that
+     * site must never receive (or be offered) the page's credentials, nor the page the frame's.
+     * Elsewhere every field belongs to {@code androidapp://<package>}.
+     */
+    public static Target resolve(String pkg, List<FormFields.Field> fields) {
+        if (pkg == null || pkg.isEmpty()) return new Target(null, new ArrayList<FormFields.Field>());
+        if (!BROWSERS.contains(pkg)) return new Target(url(pkg, null, null), new ArrayList<>(fields));
+        FormFields.Field pick = null;
+        for (FormFields.Field f : fields) {
+            if (f.focused && !f.webDomain.trim().isEmpty()) { pick = f; break; }
+        }
+        if (pick == null) {
+            for (FormFields.Field f : fields) {
+                if (!f.webDomain.trim().isEmpty()) { pick = f; break; }
+            }
+        }
+        if (pick == null) return new Target(url(pkg, null, null), new ArrayList<>(fields)); // the browser's own screens
+        String domain = pick.webDomain.trim().toLowerCase(Locale.ROOT);
+        List<FormFields.Field> same = new ArrayList<>();
+        for (FormFields.Field f : fields) {
+            if (f.webDomain.trim().toLowerCase(Locale.ROOT).equals(domain)) same.add(f);
+        }
+        return new Target(url(pkg, domain, pick.webScheme), same);
     }
 }

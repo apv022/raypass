@@ -1,6 +1,7 @@
 package app.raypass;
 
 import app.raypass.core.Json;
+import app.raypass.core.PosSet;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -50,8 +51,7 @@ final class Store {
     }
 
     private final File dir;
-    private final Set<Long> seenKeys = new HashSet<>(), seenVault = new HashSet<>();
-    private long maxKeys, maxVault;
+    private final PosSet keys = new PosSet(), vault = new PosSet();
     private final List<Pending> outbox = new ArrayList<>();
 
     Store(File filesDir) {
@@ -75,9 +75,7 @@ final class Store {
                 try {
                     Map<String, Object> m = Json.obj(Json.parse(line));
                     long pos = Json.num(m, "pos", 0);
-                    if (pos <= 0 || !seen(feed).add(pos)) continue;
-                    if (feed.equals(KEYS)) maxKeys = Math.max(maxKeys, pos);
-                    else maxVault = Math.max(maxVault, pos);
+                    if (!seen(feed).add(pos)) continue;
                     out.add(new Entry(pos, m.get("body")));
                 } catch (IllegalArgumentException torn) {
                     // A line cut short by a crash: the entry is read again from Sol.
@@ -89,26 +87,39 @@ final class Store {
         return out;
     }
 
-    private Set<Long> seen(String feed) { return feed.equals(KEYS) ? seenKeys : seenVault; }
+    private PosSet seen(String feed) { return feed.equals(KEYS) ? keys : vault; }
 
-    /** The largest cached pos of a feed (read from Sol after it). */
-    long maxPos(String feed) { return feed.equals(KEYS) ? maxKeys : maxVault; }
-
-    /** Reports whether pos of feed is cached already. */
-    boolean has(String feed, long pos) { return seen(feed).contains(pos); }
+    /**
+     * The largest pos p such that every pos 1..p is cached: catch-up reads from p+1 (see
+     * {@link PosSet}; the largest pos alone could hide a gap that would never be read).
+     */
+    long contiguous(String feed) { return seen(feed).contiguous(); }
 
     /** Appends an entry to the cache; false if it was already there. */
     boolean add(String feed, long pos, Object body) throws IOException {
-        if (pos <= 0 || seen(feed).contains(pos)) return false;
-        String line = Json.write(Json.map("pos", pos, "body", body)) + "\n";
+        return !addAll(feed, java.util.Collections.singletonList(new Entry(pos, body))).isEmpty();
+    }
+
+    /**
+     * Appends the entries not cached yet with one fsync (a first sync can bring thousands; one
+     * fsync each would take seconds); returns those that were new.
+     */
+    List<Entry> addAll(String feed, List<Entry> es) throws IOException {
+        List<Entry> fresh = new ArrayList<>();
+        Set<Long> batch = new HashSet<>();
+        StringBuilder b = new StringBuilder();
+        for (Entry e : es) {
+            if (e.pos <= 0 || seen(feed).has(e.pos) || !batch.add(e.pos)) continue;
+            b.append(Json.write(Json.map("pos", e.pos, "body", e.body))).append('\n');
+            fresh.add(e);
+        }
+        if (fresh.isEmpty()) return fresh;
         try (FileOutputStream o = new FileOutputStream(file(feed), true)) {
-            o.write(line.getBytes(StandardCharsets.UTF_8));
+            o.write(b.toString().getBytes(StandardCharsets.UTF_8));
             o.getFD().sync();
         }
-        seen(feed).add(pos);
-        if (feed.equals(KEYS)) maxKeys = Math.max(maxKeys, pos);
-        else maxVault = Math.max(maxVault, pos);
-        return true;
+        for (Entry e : fresh) seen(feed).add(e.pos);
+        return fresh;
     }
 
     // ---- outbox ----
@@ -162,10 +173,18 @@ final class Store {
 
     /** Deletes the cache and the outbox (disconnecting from a different Sol person). */
     void clear() {
-        for (String f : new String[]{KEYS + ".jsonl", VAULT + ".jsonl", "outbox.jsonl", "outbox.jsonl.tmp"}) new File(dir, f).delete();
-        seenKeys.clear();
-        seenVault.clear();
-        maxKeys = maxVault = 0;
+        clearFeeds();
+        for (String f : new String[]{"outbox.jsonl", "outbox.jsonl.tmp"}) new File(dir, f).delete();
         outbox.clear();
+    }
+
+    /**
+     * Deletes the cached feeds but keeps the outbox: Sol's pos numbers belong to one Sol install,
+     * so when Sol's device changes (Sol reinstalled or reset) the cached ones mean nothing.
+     */
+    void clearFeeds() {
+        for (String f : new String[]{KEYS + ".jsonl", VAULT + ".jsonl"}) new File(dir, f).delete();
+        keys.clear();
+        vault.clear();
     }
 }

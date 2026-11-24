@@ -220,9 +220,10 @@ func csvItem(format string, row map[string]string) (vault.Item, bool) {
 		} else if t != "" && t != "login" {
 			return it, false
 		}
-		it.Name, it.Notes, it.Folder, it.Fav = row["name"], row["notes"], row["folder"], truthy(row["favorite"])
-		url = row["login_uri"]
-		it.User, it.Pass, it.TOTP = row["login_username"], row["login_password"], row["login_totp"]
+		// unCSVSafe: Raypass's CSV export defuses formulas in these columns (csvSafe).
+		it.Name, it.Notes, it.Folder, it.Fav = unCSVSafe(row["name"]), row["notes"], unCSVSafe(row["folder"]), truthy(row["favorite"])
+		url = unCSVSafe(row["login_uri"])
+		it.User, it.Pass, it.TOTP = unCSVSafe(row["login_username"]), row["login_password"], row["login_totp"]
 		it.Fields = parseBWFields(row["fields"])
 	case ChromeCSV:
 		it.Name, url, it.User, it.Pass, it.Notes = row["name"], row["url"], row["username"], row["password"], pick(row, "note", "notes")

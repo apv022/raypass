@@ -74,6 +74,10 @@ final class Repo {
     private volatile boolean syncedOnce;
     private final Object wake = new Object();
     private int failures;
+    /** The current events request got its answer (so a later 400 is not about Last-Event-ID). */
+    private volatile boolean eventsOpened;
+    /** When the vault locks itself, in elapsedRealtime ms (counts deep sleep); 0 = never. */
+    private volatile long lockAt;
 
     private Repo(Context app) {
         this.app = app;
@@ -134,10 +138,14 @@ final class Repo {
 
     Session session() { return session; }
 
-    /** The unlocked vault, or null. */
-    Vault vault() { return session.vault(); }
+    /** The unlocked vault, or null (locks first when the auto-lock time has passed). */
+    Vault vault() {
+        checkAutoLock();
+        return session.vault();
+    }
 
     State state() {
+        checkAutoLock();
         Session s = session;
         if (s.unlocked()) return State.UNLOCKED;
         if (s.initialized()) return State.LOCKED;
@@ -152,7 +160,10 @@ final class Repo {
     /** Stores the CONNECT result and starts syncing. A different Sol person resets the cache. */
     void onConnected(String apiUrl, String token) {
         prefs.edit().putString("api", apiUrl).putString("token", token).remove("last_event_id").apply();
+        SolApi old = api;
         api = new SolApi(apiUrl, token);
+        // The old stream blocks in a read on the old connection: close it, or that thread lingers.
+        if (old != null) old.closeStream();
         connError = "";
         restartSync();
     }
@@ -202,8 +213,10 @@ final class Repo {
             try {
                 final String person = whoami(a);
                 List<String> feeds = Arrays.asList(person + "/raypass/" + Store.KEYS, person + "/raypass/" + Store.VAULT);
+                eventsOpened = false;
                 a.events(feeds, prefs.getString("last_event_id", null), new SolApi.EventSink() {
                     public void opened() throws IOException {
+                        eventsOpened = true; // past the request: a 400 after this is not about Last-Event-ID
                         catchUp(a, person, Store.KEYS);
                         catchUp(a, person, Store.VAULT);
                         if (!syncedOnce) {
@@ -236,6 +249,11 @@ final class Repo {
                     disconnect("Sol no longer accepts Raypass. Connect again.");
                     break;
                 }
+                if (e.status == 400 && !eventsOpened && prefs.contains("last_event_id")) {
+                    // Sol does not understand our resume id (a different Sol version): catch-up
+                    // reads cover the gap, so start the stream afresh.
+                    prefs.edit().remove("last_event_id").apply();
+                }
                 connError = e.status == 0 ? "Sol is not reachable" : "Sol: " + e.code;
                 Log.i(TAG, "sync: " + e.code);
                 changed();
@@ -262,9 +280,10 @@ final class Repo {
     }
 
     private String whoami(SolApi a) throws IOException {
-        String p = prefs.getString("person", null);
+        String p = prefs.getString("person", null), d = prefs.getString("sol_device", null);
         Map<String, Object> w = a.whoami();
         String person = Json.str(Json.obj(w.get("person")), "id", "");
+        String device = Json.str(Json.obj(w.get("device")), "id", "");
         if (person.isEmpty()) throw new SolApi.SolException(0, "bad_response", "whoami without a person");
         if (p != null && !p.equals(person)) {
             // Connected to another person's Sol: their feeds, not ours. Start over.
@@ -277,26 +296,55 @@ final class Repo {
             syncedOnce = false;
             prefs.edit().putBoolean("synced_once", false).remove("last_event_id").apply();
             changed();
+        } else if (d != null && !device.isEmpty() && !d.equals(device)) {
+            // Same person, another Sol install on this phone: its pos numbers are not ours, so
+            // the cache is read again from 1. The outbox (our unsent writes) is kept.
+            Log.i(TAG, "Sol device changed: reading the feeds again");
+            synchronized (storeLock) {
+                session.lock();
+                store.clearFeeds();
+                session = newSession();
+                for (Store.Pending q : store.outbox()) {
+                    if (q.feed.equals(Store.KEYS)) session.addKeysBody(q.body);
+                    else session.addVaultBody(q.body);
+                }
+            }
+            prefs.edit().remove("last_event_id").apply();
+            changed();
         }
-        prefs.edit().putString("person", person).apply();
+        prefs.edit().putString("person", person).putString("sol_device", device).apply();
         return person;
     }
 
     private void catchUp(SolApi a, String person, String feed) throws IOException {
+        long from;
+        synchronized (storeLock) { from = store.contiguous(feed) + 1; }
         while (true) {
-            long from;
-            synchronized (storeLock) { from = store.maxPos(feed) + 1; }
             List<Map<String, Object>> es = a.read(person + "/raypass/" + feed, from, 1000);
-            for (Map<String, Object> e : es) accept(feed, Json.num(e, "pos", 0), e.get("body"));
+            List<Store.Entry> batch = new ArrayList<>();
+            for (Map<String, Object> e : es) {
+                long pos = Json.num(e, "pos", 0);
+                batch.add(new Store.Entry(pos, e.get("body")));
+                from = Math.max(from, pos + 1);
+            }
+            acceptAll(feed, batch);
             if (es.size() < 1000) return;
         }
     }
 
     private void accept(String feed, long pos, Object body) throws IOException {
+        acceptAll(feed, java.util.Collections.singletonList(new Store.Entry(pos, body)));
+    }
+
+    private void acceptAll(String feed, List<Store.Entry> es) throws IOException {
+        if (es.isEmpty()) return;
         synchronized (storeLock) {
-            if (!store.add(feed, pos, body)) return;
-            if (feed.equals(Store.KEYS)) session.addKeysBody(body);
-            else session.addVaultBody(body);
+            List<Store.Entry> fresh = store.addAll(feed, es);
+            if (fresh.isEmpty()) return;
+            for (Store.Entry e : fresh) {
+                if (feed.equals(Store.KEYS)) session.addKeysBody(e.body);
+                else session.addVaultBody(e.body);
+            }
         }
         changed();
     }
@@ -394,8 +442,10 @@ final class Repo {
     }
 
     void lock() {
+        lockAt = 0;
         session.lock();
         main.removeCallbacks(autoLock);
+        expirePendingSaves(Long.MAX_VALUE);
         changed();
     }
 
@@ -409,22 +459,45 @@ final class Repo {
 
     // ---- auto-lock ----
 
+    // Handler delays count uptime, which stops in deep sleep: a phone left in a pocket would stay
+    // unlocked for hours. So the deadline is kept in elapsedRealtime (which counts sleep) and is
+    // checked whenever the vault is asked for; the Handler only locks promptly while awake.
     private final Runnable autoLock = new Runnable() {
         public void run() {
-            if (session.unlocked()) {
-                Log.i(TAG, "auto-lock");
-                lock();
-            }
+            long left = lockAt - SystemClock.elapsedRealtime();
+            if (lockAt != 0 && left > 0) main.postDelayed(this, left);
+            else checkAutoLock();
         }
     };
 
+    /** Locks when the auto-lock deadline has passed. */
+    private void checkAutoLock() {
+        long at = lockAt;
+        if (at == 0 || SystemClock.elapsedRealtime() < at) return;
+        if (session.unlocked()) {
+            Log.i(TAG, "auto-lock");
+            lock();
+        } else {
+            lockAt = 0;
+        }
+    }
+
     /** Records activity: the auto-lock timer restarts (s.auto_lock minutes, 0 = never). */
     void touch() {
+        checkAutoLock(); // an expired deadline locks; activity after it must not extend it
         main.removeCallbacks(autoLock);
         Vault v = session.vault();
-        if (v == null) return;
+        if (v == null) {
+            lockAt = 0;
+            return;
+        }
         int min = v.autoLock();
-        if (min > 0) main.postDelayed(autoLock, min * 60_000L);
+        if (min <= 0) {
+            lockAt = 0;
+            return;
+        }
+        lockAt = SystemClock.elapsedRealtime() + min * 60_000L;
+        main.postDelayed(autoLock, min * 60_000L);
     }
 
     // ---- autofill save ----
@@ -439,8 +512,35 @@ final class Repo {
         return out[0];
     }
 
-    /** Pending autofill saves waiting for an unlock, by token (memory only: never on disk). */
-    static final Map<String, String[]> pendingSaves = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Pending autofill saves waiting for an unlock, by token (memory only: never on disk):
+     * {url, user, pass, created (elapsedRealtime)}. Dropped after 10 minutes or on lock, so a
+     * save the person walked away from does not keep a password in memory.
+     */
+    private static final Map<String, String[]> pendingSaves = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long PENDING_SAVE_MS = 10 * 60_000L;
+
+    static String putPendingSave(String url, String user, String pass) {
+        expirePendingSaves(PENDING_SAVE_MS);
+        String token = UUID.randomUUID().toString();
+        pendingSaves.put(token, new String[]{url, user, pass, String.valueOf(SystemClock.elapsedRealtime())});
+        return token;
+    }
+
+    /** The pending save for token (removed), or null if none or expired. */
+    static String[] takePendingSave(String token) {
+        expirePendingSaves(PENDING_SAVE_MS);
+        return token == null ? null : pendingSaves.remove(token);
+    }
+
+    private static void expirePendingSaves(long maxAge) {
+        long now = SystemClock.elapsedRealtime();
+        for (Map.Entry<String, String[]> e : pendingSaves.entrySet()) {
+            long t;
+            try { t = Long.parseLong(e.getValue()[3]); } catch (NumberFormatException x) { t = 0; }
+            if (maxAge == Long.MAX_VALUE || now - t > maxAge) pendingSaves.remove(e.getKey());
+        }
+    }
 
     static List<String> list(String... s) { return new ArrayList<>(Arrays.asList(s)); }
 }

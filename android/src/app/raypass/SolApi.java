@@ -1,6 +1,7 @@
 package app.raypass;
 
 import app.raypass.core.Json;
+import app.raypass.core.Sse;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -49,6 +50,9 @@ final class SolApi {
 
         boolean event(Event e) throws IOException;
     }
+
+    /** Read timeout of the events stream: a few of Sol's 25 s heartbeats. */
+    static final int STREAM_READ_TIMEOUT_MS = 80_000;
 
     private final String api;
     private final String token;
@@ -157,7 +161,10 @@ final class SolApi {
         StringBuilder q = new StringBuilder();
         for (String f : feeds) q.append(q.length() == 0 ? "" : ",").append(f);
         HttpURLConnection c = open("GET", "/v1/events?feeds=" + URLEncoder.encode(q.toString(), "UTF-8"));
-        c.setReadTimeout(0); // a quiet stream is normal; Sol closes it if it goes away
+        // Sol sends a ": beat" comment every 25 s, so a read that waits much longer means the
+        // connection is dead (Sol killed, network stack reset) and must be reopened; with no
+        // timeout the sync thread would wait on it forever and never reconnect.
+        c.setReadTimeout(STREAM_READ_TIMEOUT_MS);
         c.setRequestProperty("Accept", "text/event-stream");
         if (lastEventId != null && !lastEventId.isEmpty()) c.setRequestProperty("Last-Event-ID", lastEventId);
         stream = c;
@@ -171,31 +178,15 @@ final class SolApi {
             if (status / 100 != 2) throw error(c, status);
             sink.opened();
             BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8));
-            Event ev = new Event();
-            StringBuilder data = new StringBuilder();
-            boolean hasData = false;
+            Sse sse = new Sse();
             for (String line; (line = r.readLine()) != null; ) {
-                if (line.isEmpty()) {
-                    if (!ev.type.isEmpty()) {
-                        ev.data = data.toString();
-                        if (!sink.event(ev)) return;
-                    }
-                    ev = new Event();
-                    data.setLength(0);
-                    hasData = false;
-                } else if (line.startsWith(":")) {
-                    // comment / keep-alive
-                } else if (line.startsWith("id:")) {
-                    ev.id = line.substring(3).trim();
-                } else if (line.startsWith("event:")) {
-                    ev.type = line.substring(6).trim();
-                } else if (line.startsWith("data:")) {
-                    String d = line.substring(5);
-                    if (d.startsWith(" ")) d = d.substring(1);
-                    if (hasData) data.append('\n');
-                    data.append(d);
-                    hasData = true;
-                }
+                Sse.Event e = sse.line(line);
+                if (e == null) continue;
+                Event ev = new Event();
+                ev.id = e.id;
+                ev.type = e.type;
+                ev.data = e.data;
+                if (!sink.event(ev)) return;
             }
         } catch (SolException e) {
             throw e;

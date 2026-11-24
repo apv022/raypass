@@ -100,6 +100,7 @@ type App struct {
 	settings vault.Settings
 	lockGen  uint64
 	stopLock func() bool
+	lockAt   time.Time // when auto-lock fires; zero when locked or auto_lock is 0
 
 	unlockMu sync.Mutex // one password check at a time, so the backoff cannot be raced
 	failures int
@@ -383,11 +384,17 @@ func (a *App) open(vk []byte, kid string) {
 func (a *App) lock() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.lockLocked()
+}
+
+// lockLocked is lock with a.mu held.
+func (a *App) lockLocked() {
 	if a.stopLock != nil {
 		a.stopLock()
 		a.stopLock = nil
 	}
 	a.lockGen++
+	a.lockAt = time.Time{}
 	if a.vk == nil {
 		return
 	}
@@ -400,7 +407,9 @@ func (a *App) lock() {
 	a.applied, a.bad = 0, 0
 }
 
-// touch records activity: it re-arms the auto-lock timer for s.auto_lock minutes.
+// touch records activity: it re-arms the auto-lock timer for s.auto_lock minutes. Only calls
+// that use the vault (or unlock it, or change its settings) count as activity: status,
+// generate and lock do not, so a client that merely looks never keeps the vault open.
 func (a *App) touch() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -409,19 +418,40 @@ func (a *App) touch() {
 		a.stopLock = nil
 	}
 	a.lockGen++
+	a.lockAt = time.Time{}
 	if a.vk == nil || a.settings.AutoLock <= 0 {
 		return
 	}
-	gen := a.lockGen
-	a.stopLock = a.clock.AfterFunc(time.Duration(a.settings.AutoLock)*time.Minute, func() {
+	gen, minutes := a.lockGen, a.settings.AutoLock
+	d := time.Duration(minutes) * time.Minute
+	a.lockAt = a.clock.Now().Add(d)
+	a.stopLock = a.clock.AfterFunc(d, func() {
+		// Check and lock in one critical section, so an action that re-arms the timer at the
+		// same moment either wins (stale) or finds the vault locked: never locked after it.
 		a.mu.Lock()
-		stale := a.lockGen != gen
+		fired := a.lockGen == gen
+		if fired {
+			a.lockLocked()
+		}
 		a.mu.Unlock()
-		if !stale {
-			a.logf("raypass: auto-locked after %d minutes without use", a.settings.AutoLock)
-			a.lock()
+		if fired {
+			a.logf("raypass: auto-locked after %d minutes without use", minutes)
 		}
 	})
+}
+
+// locksIn is how many seconds remain before auto-lock (rounded up), 0 when locked or never.
+func (a *App) locksIn() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.vk == nil || a.lockAt.IsZero() {
+		return 0
+	}
+	d := a.lockAt.Sub(a.clock.Now())
+	if d <= 0 {
+		return 0
+	}
+	return int((d + time.Second - 1) / time.Second)
 }
 
 // orphaned counts vault entries that cannot be read with this vault's key: other vaults'

@@ -39,6 +39,9 @@ public class ItemActivity extends BaseActivity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private Runnable tick;
     private final java.util.Set<String> revealed = new java.util.HashSet<>();
+    /** The values last rendered: sync events for other items must not rebuild this screen. */
+    private Map<String, Object> shownValues;
+    private ScrollView shownScroll;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -58,10 +61,17 @@ public class ItemActivity extends BaseActivity {
         super.onPause();
         if (tick != null) main.removeCallbacks(tick);
         revealed.clear(); // leaving the screen hides secrets again
+        shownValues = null;
     }
 
     @Override
-    void refresh() { render(); }
+    void refresh() {
+        // Any change to the vault (another item, a sync) lands here; re-render only when this item
+        // changed, so the scroll position, the open history and revealed fields stay put.
+        Item it = item();
+        if (it != null && shownValues != null && it.copyValues().equals(shownValues)) return;
+        render();
+    }
 
     private Item item() {
         Vault v = repo.vault();
@@ -75,10 +85,13 @@ public class ItemActivity extends BaseActivity {
             return;
         }
         invalidateOptionsMenu();
+        final int scrollY = shownScroll == null ? 0 : shownScroll.getScrollY();
+        shownValues = it.copyValues();
         setTitle(Ui.typeLabel(it.type));
         if (tick != null) main.removeCallbacks(tick);
         tick = null;
-        ScrollView sv = new ScrollView(this);
+        final ScrollView sv = new ScrollView(this);
+        shownScroll = sv;
         LinearLayout col = Ui.column(this);
         int pad = Ui.dp(this, 16);
         col.setPadding(pad, pad, pad, Ui.dp(this, 32));
@@ -164,6 +177,7 @@ public class ItemActivity extends BaseActivity {
         col.addView(Ui.text(this, "Created " + df.format(new Date(it.created())) + "\nUpdated " + df.format(new Date(it.updated())), 12, R.color.text2),
                 Ui.matchWrap(this, 16));
         setContentView(sv);
+        if (scrollY > 0) sv.post(new Runnable() { public void run() { sv.scrollTo(0, scrollY); } });
     }
 
     private void addField(LinearLayout parent, final String key, final String label, final String value, final boolean secret, boolean mono) {

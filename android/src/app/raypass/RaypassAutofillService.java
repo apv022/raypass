@@ -23,10 +23,10 @@ import android.widget.RemoteViews;
 
 import app.raypass.core.FormFields;
 import app.raypass.core.Item;
+import app.raypass.core.Totp;
 import app.raypass.core.Vault;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Android autofill: finds login fields (AutofillParser + FormFields), offers matching logins as
@@ -56,7 +56,8 @@ public class RaypassAutofillService extends AutofillService {
             }
             FillResponse.Builder b = new FillResponse.Builder();
             Intent i = new Intent(this, AutofillAuthActivity.class).putExtra("mode", "fill");
-            IntentSender sender = PendingIntent.getActivity(this, 1, i,
+            // Mutable: the framework adds the AssistStructure to it. Explicit, so that is safe.
+            IntentSender sender = PendingIntent.getActivity(this, requestCode(), i,
                     PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_MUTABLE).getIntentSender();
             b.setAuthentication(p.ids(), sender, presentation(this, "Unlock Raypass", "to fill this login"));
             SaveInfo si = saveInfo(p);
@@ -68,11 +69,33 @@ public class RaypassAutofillService extends AutofillService {
         cb.onSuccess(response(this, p, v));
     }
 
-    /** The datasets for the matching logins plus SaveInfo; null if there is nothing to offer. */
+    private static final java.util.concurrent.atomic.AtomicInteger codes = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * A PendingIntent request code of its own: with one shared code, FLAG_CANCEL_CURRENT would
+     * cancel the "Unlock" or one-time-code entry of a response that is still on screen.
+     */
+    static int requestCode() { return 16 + (codes.incrementAndGet() & 0xffff); }
+
+    /**
+     * The datasets for the matching logins (and their one-time codes when the screen has a code
+     * field) plus SaveInfo; null if there is nothing to offer.
+     */
     static FillResponse response(Context c, AutofillParser p, Vault v) {
         FillResponse.Builder b = new FillResponse.Builder();
         boolean any = false;
         List<Item> matches = v.match(p.url);
+        if (p.form.otp != null) {
+            int n = 0;
+            for (Item it : matches) {
+                if (n >= MAX_DATASETS) break;
+                Dataset d = otpDataset(c, p, it);
+                if (d == null) continue;
+                b.addDataset(d);
+                any = true;
+                n++;
+            }
+        }
         for (int k = 0; k < matches.size() && k < MAX_DATASETS; k++) {
             Item it = matches.get(k);
             String user = it.str("user"), pass = it.str("pass");
@@ -97,6 +120,43 @@ public class RaypassAutofillService extends AutofillService {
             any = true;
         }
         return any ? b.build() : null;
+    }
+
+    /**
+     * A dataset that fills the one-time code of it into the code field. The code is computed when
+     * the person picks it (an authentication intent that returns the filled dataset at once), not
+     * now: a response can sit on screen longer than the 30 s a code lives.
+     */
+    private static Dataset otpDataset(Context c, AutofillParser p, Item it) {
+        String secret = it.str("totp");
+        if (secret.isEmpty()) return null;
+        try {
+            Totp.parse(secret);
+        } catch (Totp.Invalid e) {
+            return null;
+        }
+        AutofillId field = (AutofillId) p.form.otp.id;
+        Intent i = new Intent(c, AutofillAuthActivity.class).putExtra("mode", "otp").putExtra("item", it.id).putExtra("field", field);
+        IntentSender sender = PendingIntent.getActivity(c, requestCode(), i,
+                PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE).getIntentSender();
+        Dataset.Builder d = new Dataset.Builder(presentation(c, it.name(), "One-time code"));
+        d.setValue(field, null); // the value comes back from the authentication intent
+        d.setAuthentication(sender);
+        return d.build();
+    }
+
+    /** The dataset with the current one-time code of item id for field, or null. */
+    static Dataset otpResult(Vault v, String id, AutofillId field) {
+        Item it = id == null ? null : v.get(id);
+        if (it == null || field == null) return null;
+        try {
+            Totp t = Totp.parse(it.str("totp"));
+            Dataset.Builder d = new Dataset.Builder();
+            d.setValue(field, AutofillValue.forText(t.code(System.currentTimeMillis())));
+            return d.build();
+        } catch (Totp.Invalid e) {
+            return null;
+        }
     }
 
     static SaveInfo saveInfo(AutofillParser p) {
@@ -144,10 +204,9 @@ public class RaypassAutofillService extends AutofillService {
         }
         if (Build.VERSION.SDK_INT >= 28 && repo.session().initialized()) {
             // Locked: keep the login in memory only, unlock, then save (AutofillAuthActivity).
-            String token = UUID.randomUUID().toString();
-            Repo.pendingSaves.put(token, new String[]{url, user.trim(), pass});
+            String token = Repo.putPendingSave(url, user.trim(), pass);
             Intent i = new Intent(this, AutofillAuthActivity.class).putExtra("mode", "save").putExtra("token", token);
-            cb.onSuccess(PendingIntent.getActivity(this, 2, i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE).getIntentSender());
+            cb.onSuccess(PendingIntent.getActivity(this, requestCode(), i, PendingIntent.FLAG_CANCEL_CURRENT | PendingIntent.FLAG_IMMUTABLE).getIntentSender());
             return;
         }
         cb.onFailure("Unlock Raypass, then save again");

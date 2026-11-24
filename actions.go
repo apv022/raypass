@@ -18,8 +18,8 @@ import (
 	"github.com/apv022/sol/sdk/go/sol"
 )
 
-// Every action: Sol-Self only, then drain the feeds (fresh), then record activity for
-// auto-lock. Every write honours Sol-Dry-Run: it validates exactly as the real call would, then
+// Every action: Sol-Self only, then drain the feeds (fresh), then (vault actions, setup, unlock,
+// change_password) record activity for auto-lock. Every write honours Sol-Dry-Run: it validates exactly as the real call would, then
 // describes the change without making it, and never echoes a secret in the description.
 
 func bad(format string, a ...any) error { return sol.Errorf("bad_request", fmt.Sprintf(format, a...)) }
@@ -44,7 +44,11 @@ func dry(would any) map[string]any { return map[string]any{"dry_run": true, "wou
 func ok() map[string]any { return map[string]any{"ok": true} }
 
 func (a *App) registerActions(act *sol.Actions) {
-	h := func(name string, f func(ctx context.Context, c sol.Call) (any, error)) {
+	// handle wraps every action: Sol-Self only, drain the feeds, then (when active) record
+	// activity for auto-lock. Only actions that use or open the vault are activity; status,
+	// generate and lock are not, or a client that merely shows the lock state would keep the
+	// vault unlocked forever.
+	handle := func(name string, active bool, f func(ctx context.Context, c sol.Call) (any, error)) {
 		act.Handle(name, func(ctx context.Context, c sol.Call) (any, error) {
 			if !c.Caller.Self {
 				return nil, sol.Errorf("forbidden", "Raypass answers only my own devices and agents")
@@ -52,13 +56,15 @@ func (a *App) registerActions(act *sol.Actions) {
 			if err := a.fresh(ctx); err != nil {
 				return nil, err
 			}
-			a.touch()
+			if active {
+				a.touch()
+			}
 			return f(ctx, c)
 		})
 	}
-	// vh is h for actions that need the unlocked vault.
+	// vh is for actions that need the unlocked vault (always activity).
 	vh := func(name string, f func(ctx context.Context, c sol.Call, st *vault.State) (any, error)) {
-		h(name, func(ctx context.Context, c sol.Call) (any, error) {
+		handle(name, true, func(ctx context.Context, c sol.Call) (any, error) {
 			st, err := a.state()
 			if err != nil {
 				return nil, err
@@ -66,12 +72,12 @@ func (a *App) registerActions(act *sol.Actions) {
 			return f(ctx, c, st)
 		})
 	}
-	h("raypass.status", a.actStatus)
-	h("raypass.setup", a.actSetup)
-	h("raypass.unlock", a.actUnlock)
-	h("raypass.lock", a.actLock)
-	h("raypass.change_password", a.actChangePassword)
-	h("raypass.generate", a.actGenerate)
+	handle("raypass.status", false, a.actStatus)
+	handle("raypass.setup", true, a.actSetup)
+	handle("raypass.unlock", true, a.actUnlock)
+	handle("raypass.lock", false, a.actLock)
+	handle("raypass.change_password", true, a.actChangePassword)
+	handle("raypass.generate", false, a.actGenerate)
 	vh("raypass.list", a.actList)
 	vh("raypass.get", a.actGet)
 	vh("raypass.add", a.actAdd)
@@ -115,7 +121,7 @@ func (a *App) actStatus(_ context.Context, _ sol.Call) (any, error) {
 	st, settings := a.st, a.settings
 	a.mu.Unlock()
 	out := map[string]any{"initialized": kr.OK, "locked": locked, "items": 0, "trash": 0, "orphaned": 0,
-		"auto_lock": settings.AutoLock, "clip_clear": settings.ClipClear, "kdf_iter": 0}
+		"auto_lock": settings.AutoLock, "clip_clear": settings.ClipClear, "kdf_iter": 0, "locks_in": a.locksIn()}
 	if kr.OK {
 		out["kdf_iter"] = kr.Current.KDF.Iter
 		out["orphaned"] = a.orphaned(kr.Current.ID)

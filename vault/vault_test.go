@@ -327,3 +327,25 @@ func TestExportRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A far-future stamp (a device whose clock ran years ahead) does not freeze a field: applying
+// it moves this device's clock past it, so the next local write still wins.
+func TestFarFutureStampDoesNotFreeze(t *testing.T) {
+	clk := crdt.NewClock("me")
+	clk.Wall = func() int64 { return 1795121162000 }
+	s := NewState(clk)
+	id := "0123456789abcdef"
+	future := crdt.Stamp{Wall: 1795121162000 * 100, Counter: 7, Device: "ahead"}
+	s.Apply([]crdt.MapOp{
+		{Key: "i." + id + ".type", Value: json.RawMessage(`"note"`), Stamp: crdt.Stamp{Wall: 1795121162000, Device: "other"}},
+		{Key: "i." + id + ".name", Value: json.RawMessage(`"from the future"`), Stamp: future},
+	})
+	ops, err := s.Update(id, map[string]json.RawMessage{"name": json.RawMessage(`"mine"`)}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Apply(ops)
+	if it, _ := s.Get(id); it.Name != "mine" {
+		t.Fatalf("a local write lost to a far-future stamp: %q", it.Name)
+	}
+}

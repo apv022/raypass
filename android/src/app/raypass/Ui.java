@@ -148,16 +148,22 @@ final class Ui {
 
     /** A round badge with the first letter of a name, coloured by type. */
     static TextView avatar(Context c, String name, String type) {
-        TextView t = text(c, name.isEmpty() ? "?" : name.substring(0, Character.charCount(name.codePointAt(0))).toUpperCase(), 17, R.color.on_accent);
+        TextView t = text(c, "", 17, R.color.on_accent);
         t.setGravity(Gravity.CENTER);
+        t.setTextColor(0xFFFFFFFF);
+        setAvatar(t, name, type);
+        return t;
+    }
+
+    /** Points an avatar at another item (rows are reused while scrolling). */
+    static void setAvatar(TextView t, String name, String type) {
+        t.setText(name.isEmpty() ? "?" : name.substring(0, Character.charCount(name.codePointAt(0))).toUpperCase());
         int[] palette = {0xFF3E5BD8, 0xFF8E44AD, 0xFF16A085, 0xFFD35400, 0xFFB7950B};
         int i = Math.max(0, app.raypass.core.Item.TYPES.indexOf(type));
         GradientDrawable d = new GradientDrawable();
         d.setShape(GradientDrawable.OVAL);
         d.setColor(palette[i % palette.length]);
         t.setBackground(d);
-        t.setTextColor(0xFFFFFFFF);
-        return t;
     }
 
     static View divider(Context c) {

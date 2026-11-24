@@ -3,7 +3,9 @@ package app.raypass;
 import android.app.assist.AssistStructure;
 import android.content.Intent;
 import android.os.Bundle;
+import android.service.autofill.Dataset;
 import android.service.autofill.FillResponse;
+import android.view.autofill.AutofillId;
 import android.view.autofill.AutofillManager;
 import android.widget.ScrollView;
 import android.widget.Toast;
@@ -35,7 +37,7 @@ public class AutofillAuthActivity extends BaseActivity {
     private void done() {
         String mode = getIntent().getStringExtra("mode");
         if ("save".equals(mode)) {
-            String[] s = Repo.pendingSaves.remove(String.valueOf(getIntent().getStringExtra("token")));
+            String[] s = Repo.takePendingSave(getIntent().getStringExtra("token"));
             if (s != null) {
                 try {
                     repo.saveLogin(s[0], s[1], s[2]);
@@ -46,6 +48,15 @@ public class AutofillAuthActivity extends BaseActivity {
                 s[2] = null;
             }
             setResult(RESULT_OK);
+            finish();
+            return;
+        }
+        if ("otp".equals(mode)) {
+            Dataset d = repo.vault() == null ? null : RaypassAutofillService.otpResult(repo.vault(),
+                    getIntent().getStringExtra("item"), (AutofillId) getIntent().getParcelableExtra("field"));
+            if (d == null) setResult(RESULT_CANCELED);
+            else setResult(RESULT_OK, new Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, d));
+            repo.touch();
             finish();
             return;
         }

@@ -15,28 +15,33 @@ import java.util.List;
 
 /**
  * Turns an AssistStructure into what {@link FormFields} looks at: every editable text node's
- * autofill id, hints, input type, resource id, hint text and HTML attributes, in traversal order;
- * plus the app package and (from browsers only, see {@link AutofillTarget}) the web domain.
+ * autofill id, hints, input type, resource id, hint text, HTML attributes, focus and the web
+ * domain of the page or frame it sits in (inherited from the nearest ancestor that reports one),
+ * in traversal order; plus the app package. {@link AutofillTarget#resolve} then picks the URL
+ * (web domains from known browsers only) and keeps only the fields of that one frame.
  */
 final class AutofillParser {
-    final List<FormFields.Field> fields = new ArrayList<>();
+    /** The fields of the chosen page or frame. */
+    final List<FormFields.Field> fields;
     final FormFields.Form form;
     final String pkg;
     final String url;
-    private String webDomain, webScheme;
+    private final List<FormFields.Field> all = new ArrayList<>();
 
     AutofillParser(AssistStructure s) {
         pkg = s.getActivityComponent() == null ? null : s.getActivityComponent().getPackageName();
-        for (int i = 0; i < s.getWindowNodeCount(); i++) walk(s.getWindowNodeAt(i).getRootViewNode());
+        for (int i = 0; i < s.getWindowNodeCount(); i++) walk(s.getWindowNodeAt(i).getRootViewNode(), "", "");
+        AutofillTarget.Target t = AutofillTarget.resolve(pkg, all);
+        url = t.url;
+        fields = t.fields;
         form = FormFields.parse(fields);
-        url = AutofillTarget.url(pkg, webDomain, webScheme);
     }
 
-    private void walk(AssistStructure.ViewNode n) {
+    private void walk(AssistStructure.ViewNode n, String domain, String scheme) {
         if (n == null) return;
-        if (webDomain == null && n.getWebDomain() != null && !n.getWebDomain().isEmpty()) {
-            webDomain = n.getWebDomain();
-            if (android.os.Build.VERSION.SDK_INT >= 28) webScheme = n.getWebScheme();
+        if (n.getWebDomain() != null && !n.getWebDomain().isEmpty()) {
+            domain = n.getWebDomain();
+            scheme = android.os.Build.VERSION.SDK_INT >= 28 && n.getWebScheme() != null ? n.getWebScheme() : "";
         }
         AutofillId id = n.getAutofillId();
         if (id != null && n.getAutofillType() == View.AUTOFILL_TYPE_TEXT && n.getVisibility() == View.VISIBLE) {
@@ -46,6 +51,9 @@ final class AutofillParser {
             f.idEntry = n.getIdEntry() == null ? "" : n.getIdEntry();
             f.hint = n.getHint() == null ? "" : n.getHint();
             f.editable = n.isEnabled();
+            f.focused = n.isFocused();
+            f.webDomain = domain;
+            f.webScheme = scheme;
             ViewStructure.HtmlInfo h = n.getHtmlInfo();
             if (h != null) {
                 if (!"input".equalsIgnoreCase(h.getTag())) f.editable = false;
@@ -65,9 +73,9 @@ final class AutofillParser {
             AutofillValue v = n.getAutofillValue();
             if (v != null && v.isText()) f.text = v.getTextValue().toString();
             else if (n.getText() != null) f.text = n.getText().toString();
-            fields.add(f);
+            all.add(f);
         }
-        for (int i = 0; i < n.getChildCount(); i++) walk(n.getChildAt(i));
+        for (int i = 0; i < n.getChildCount(); i++) walk(n.getChildAt(i), domain, scheme);
     }
 
     /** The ids to save or fill (username first). */
