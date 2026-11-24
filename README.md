@@ -38,7 +38,7 @@ sol do raypass.list --args '{"query": "github"}'
 sol do raypass.get --args '{"id": "3fa91c20d4e5f601"}' --json
 sol do raypass.generate --args '{"mode": "words", "words": 6}'
 sol do raypass.import --args '{"data": "…file contents…"}'
-sol do raypass --help                                  # every action and its arguments
+sol do --help raypass                                  # every action and its arguments
 ```
 
 Actions that reveal a secret or change the vault need your approval when an agent calls them.

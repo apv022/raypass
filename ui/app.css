@@ -384,7 +384,7 @@ kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; 
   .cf-row input[name="cf-value"] { flex: 1; }
   .health-hero { flex-direction: column; text-align: center; }
   .gen-acts button { flex: 1; min-width: 0; }
-  .opt select { min-width: 0; max-width: 50%; }
+  .opt select { min-width: 0; max-width: 62%; padding-right: 26px; }
   .seed-grid { grid-template-columns: repeat(2, 1fr); }
   .meter-label { min-width: 0; }
 }
