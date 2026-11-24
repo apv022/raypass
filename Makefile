@@ -44,6 +44,7 @@ package:
 # EFF large word list, checking its shape (7776 "ddddd<TAB>word" lines) first.
 wordlist:
 	curl -fsSL -o gen/wordlist.txt.new https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt
+	@echo "addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e  gen/wordlist.txt.new" | sha256sum -c -
 	@n=$$(grep -cE '^[1-6]{5}	[a-z-]+$$' gen/wordlist.txt.new); if [ "$$n" != 7776 ]; then echo "unexpected word list ($$n lines)"; rm -f gen/wordlist.txt.new; exit 1; fi
 	mv gen/wordlist.txt.new gen/wordlist.txt
 	$(GO) test ./gen
