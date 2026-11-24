@@ -120,14 +120,34 @@ final class UnlockView {
             final Runnable ask = new Runnable() {
                 public void run() {
                     Bio.unlock(a, new Bio.Done() {
-                        public void ok(byte[] vk) {
-                            try {
-                                repo.unlockWithKey(vk);
-                                done.unlocked();
-                            } catch (Exception e) {
-                                Bio.disable(a);
-                                err.setText("Biometric unlock no longer matches this vault. Use your master password.");
-                            }
+                        public void ok(final byte[] vk) {
+                            err.setText("Unlocking…");
+                            spin.setVisibility(View.VISIBLE);
+                            // Unlocking decrypts and folds every vault entry: not on the main thread.
+                            repo.bg.execute(new Runnable() {
+                                public void run() {
+                                    boolean ok;
+                                    try {
+                                        repo.unlockWithKey(vk);
+                                        ok = true;
+                                    } catch (Exception e) {
+                                        ok = false;
+                                    }
+                                    final boolean fine = ok;
+                                    main.post(new Runnable() {
+                                        public void run() {
+                                            spin.setVisibility(View.GONE);
+                                            if (fine) {
+                                                err.setText("");
+                                                done.unlocked();
+                                            } else {
+                                                Bio.disable(a);
+                                                err.setText("Biometric unlock no longer matches this vault. Use your master password.");
+                                            }
+                                        }
+                                    });
+                                }
+                            });
                         }
 
                         public void failed(String why) { err.setText(why); }

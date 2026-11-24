@@ -175,9 +175,17 @@ public class MainActivity extends BaseActivity {
         });
     }
 
-    /** The CONNECT request (Sol's android/README.md "For Android developers"). */
+    /** Sol's package: only Sol may answer CONNECT. */
+    static final String SOL_PACKAGE = "app.sol";
+
+    /**
+     * The CONNECT request (Sol's android/README.md "For Android developers"). Pinned to Sol's
+     * package: any app can declare the action, and one that answered would hand us a token and a
+     * loopback "api" of its own, receiving our keyring and ciphertext and serving us a fake vault.
+     */
     static Intent connectIntent() {
         return new Intent("app.sol.action.CONNECT")
+                .setPackage(SOL_PACKAGE)
                 .putExtra("app_id", "raypass")
                 .putExtra("name", "Raypass")
                 .putExtra("description", "Password manager. Stores your vault, encrypted on this phone, in your Sol feeds.")
@@ -186,7 +194,9 @@ public class MainActivity extends BaseActivity {
 
     /** Handles a CONNECT result: null when connected, else a message for the person. */
     static String connectResult(Repo repo, int res, Intent data) {
-        if (res == RESULT_OK && data != null && data.getStringExtra("token") != null && data.getStringExtra("api") != null) {
+        String id = data == null ? null : data.getStringExtra("app_id");
+        if (res == RESULT_OK && data != null && data.getStringExtra("token") != null && data.getStringExtra("api") != null
+                && (id == null || id.equals("raypass"))) {
             repo.onConnected(data.getStringExtra("api"), data.getStringExtra("token"));
             return null;
         }
@@ -195,6 +205,7 @@ public class MainActivity extends BaseActivity {
             case "denied": return "You did not allow Raypass in Sol.";
             case "not_set_up": return "Sol is not set up yet. Open Sol, set it up, then connect.";
             case "canceled": return "Connecting was canceled.";
+            case "not_for_result": return "Sol did not see who asked. Update Raypass and Sol, then connect again.";
             default: return "Sol could not connect Raypass (" + err + ").";
         }
     }

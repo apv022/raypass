@@ -46,6 +46,9 @@ public class AutofillAuthActivity extends BaseActivity {
                     Toast.makeText(this, "Raypass could not save this login", Toast.LENGTH_LONG).show();
                 }
                 s[2] = null;
+            } else {
+                // Kept only in memory and only for a while: Raypass restarted or it expired.
+                Toast.makeText(this, "This login is no longer waiting to be saved. Save it again.", Toast.LENGTH_LONG).show();
             }
             setResult(RESULT_OK);
             finish();

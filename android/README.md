@@ -7,31 +7,39 @@ framework and `javax.crypto` only: no Gradle, no AndroidX, no third-party code.
 
 ## What it does
 
-- **Connect** to Sol once (`app.sol.action.CONNECT`, app id `raypass`, scope `feeds`); the token
-  and API address stay in the app's private storage. Handles Sol missing, denied, not set up, and
+- **Connect** to Sol once (`app.sol.action.CONNECT`, pinned to Sol's package `app.sol` so no
+  other app can answer it; app id `raypass`, scope `feeds`); the token and API address stay in the
+  app's private storage, excluded from backups and device-to-device transfer. Handles Sol missing, denied, not set up, and
   a revoked token (401: connect again).
 - **Sync** with Sol's loopback API: `GET /v1/whoami`, read `<person>/raypass/keys` and `…/vault`
   from the cached position, `POST /v1/feeds/{feed}/append`, and the events stream
-  (`/v1/events`, resumed with `Last-Event-ID`; reconnects with backoff, never polls). Every
+  (`/v1/events`, resumed with `Last-Event-ID`; reconnects with backoff, and treats 80 s without
+  Sol's 25 s heartbeat as a dead connection; never polls). Catch-up reads restart below any gap
+  in the cached positions, and the cache is read afresh if Sol itself is reinstalled. Every
   entry is cached as ciphertext in `files/feeds/`, so the app opens and unlocks offline; writes
   made offline wait in an outbox and are appended in order.
 - **Vault**: create (only after the `keys` feed was read, so a phone never starts a second
   vault), unlock (PBKDF2-SHA256, 600 000 rounds; throttled after 5 failures), optional
   biometric unlock (the vault key wrapped by an Android Keystore key that needs a strong
-  biometric for each use), change master password, lock, auto-lock after `s.auto_lock` minutes.
-  Locking wipes the key and every decrypted value.
+  biometric for each use), change master password, lock, auto-lock after `s.auto_lock` minutes
+  (counted in real time, deep sleep included). Locking wipes the key and every decrypted value
+  and closes every screen that showed one, in the background too.
 - **Items**: list with search and filters (favourites, logins, notes, cards, identities,
   wallets, trash), detail with copy (marked sensitive, cleared after `s.clip_clear` seconds),
   show/hide, live TOTP (RFC 6238, SHA1/256/512, Steam), password history; add/edit every type
   with custom fields; trash, restore, delete forever. `FLAG_SECURE` on every window.
 - **Generator**: characters or EFF words (`../gen/wordlist.txt`, the EFF large list, packed as `res/raw/wordlist`),
   entropy computed like the Go app.
-- **Autofill** (`RaypassAutofillService`): finds username/password fields from autofill hints,
-  HTML attributes, input types and id/hint words; offers logins matching
+- **Autofill** (`RaypassAutofillService`): finds username/password/one-time-code fields from
+  autofill hints, HTML attributes, input types and id/hint words; offers logins matching
   `androidapp://<package>`, or the web domain reported by a known browser (URL rules and the
   suffix list `../urlmatch/suffixes.txt` shared with the Go app) (any other app could
-  claim any domain, so only browsers are believed); "Unlock Raypass" when locked; saves new or
-  changed logins (same user and domain updates the password and keeps the old one in history).
+  claim any domain, so only browsers are believed). In a browser only the fields of the focused
+  frame are filled, under that frame's domain, so a cross-site iframe never gets the page's
+  login. A one-time-code field gets the item's TOTP code, computed when you pick it. "Unlock
+  Raypass" when locked; saves new or changed logins (same user and domain updates the password
+  and keeps the old one in history). Raypass's own windows are excluded from other autofill
+  services.
 
 ## Build
 
@@ -75,7 +83,10 @@ Settings screen, once the vault is unlocked.
 - Import and export (the Go app's `raypass.import` / `raypass.export`) are not on the phone;
   use the desktop app.
 - The health report is not shown on the phone.
-- A one-time-code field is recognised but not filled.
+- No autofill compatibility mode: Chrome fills through Raypass once "Autofill using another
+  service" is chosen in Chrome's settings (Chrome 131+); Firefox and other browsers with native
+  autofill work directly. No inline (keyboard) suggestions; the dropdown is used.
+- No "search the vault" entry in autofill for an app that has no saved login yet.
 - Not tested on a device or emulator in this environment (none available); it compiles against
   API 34, every API above 26 is guarded by a version check (checked by compiling against the
   API 26 framework), and the logic below the UI is covered by `test.sh`.

@@ -33,6 +33,7 @@ public class SettingsActivity extends BaseActivity {
     private static final int[] AUTO_LOCK = {1, 5, 15, 30, 60, 240, 0};
     private static final int[] CLIP = {10, 30, 60, 120, 0};
     private final Handler main = new Handler(Looper.getMainLooper());
+    private ScrollView shown;
 
     @Override
     boolean needsVault() { return false; }
@@ -60,7 +61,11 @@ public class SettingsActivity extends BaseActivity {
     }
 
     private void render() {
-        ScrollView sv = new ScrollView(this);
+        // Re-rendered on every sync event: keep the scroll position.
+        final int scrollY = shown == null ? 0 : shown.getScrollY();
+        final ScrollView sv = new ScrollView(this);
+        shown = sv;
+        if (scrollY > 0) sv.post(new Runnable() { public void run() { sv.scrollTo(0, scrollY); } });
         LinearLayout col = Ui.column(this);
         int pad = Ui.dp(this, 16);
         col.setPadding(pad, 0, pad, Ui.dp(this, 40));

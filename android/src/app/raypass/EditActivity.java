@@ -37,6 +37,8 @@ public class EditActivity extends BaseActivity {
     private CheckBox fav;
     private LinearLayout fieldsBox;
     private final List<View[]> customRows = new ArrayList<>();
+    /** The form as built, to tell whether leaving would drop changes. */
+    private String initial;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -150,7 +152,32 @@ public class EditActivity extends BaseActivity {
         save.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { save(); } });
         col.addView(save, Ui.matchWrap(this, 20));
         setContentView(sv);
+        initial = snapshot();
     }
+
+    /** Everything typed into the form, in one string (memory only; compared, never shown). */
+    private String snapshot() {
+        StringBuilder b = new StringBuilder();
+        for (Map.Entry<String, EditText> e : inputs.entrySet()) b.append(e.getKey()).append('\0').append(e.getValue().getText()).append('\0');
+        b.append(fav != null && fav.isChecked()).append('\0').append(Json.write(customValue()));
+        return b.toString();
+    }
+
+    /** Leaves the form, asking first when something was changed. */
+    private void leave() {
+        if (initial == null || initial.equals(snapshot())) {
+            finish();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Discard changes?")
+                .setPositiveButton("Discard", new android.content.DialogInterface.OnClickListener() {
+                    public void onClick(android.content.DialogInterface d, int w) { finish(); }
+                })
+                .setNegativeButton("Keep editing", null).show();
+    }
+
+    @Override
+    public void onBackPressed() { leave(); }
 
     private void addCustom(String name, String value, boolean hidden) {
         final LinearLayout box = Ui.card(this);
@@ -285,7 +312,7 @@ public class EditActivity extends BaseActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem mi) {
         if (mi.getItemId() == android.R.id.home) {
-            finish();
+            leave();
             return true;
         }
         if (mi.getItemId() == 1) {

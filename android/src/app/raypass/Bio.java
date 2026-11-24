@@ -73,7 +73,12 @@ final class Bio {
     private static SecretKey key(boolean create) throws Exception {
         KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
         ks.load(null);
-        if (!create && ks.containsAlias(ALIAS)) return (SecretKey) ks.getKey(ALIAS, null);
+        if (!create) {
+            // Never make a fresh key to decrypt with: it could not open the stored wrap anyway.
+            SecretKey k = ks.containsAlias(ALIAS) ? (SecretKey) ks.getKey(ALIAS, null) : null;
+            if (k == null) throw new java.security.KeyStoreException("no biometric key");
+            return k;
+        }
         KeyGenerator g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
         KeyGenParameterSpec.Builder b = new KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -138,6 +143,7 @@ final class Bio {
         try {
             iv = Base64.decode(p.getString("iv", ""), Base64.NO_WRAP);
             ct = Base64.decode(p.getString("ct", ""), Base64.NO_WRAP);
+            if (iv.length != 12 || ct.length != 32 + 16) throw new java.security.InvalidKeyException("no wrapped key");
             c = Cipher.getInstance("AES/GCM/NoPadding");
             c.init(Cipher.DECRYPT_MODE, key(false), new GCMParameterSpec(128, iv));
         } catch (KeyPermanentlyInvalidatedException e) {
@@ -152,11 +158,14 @@ final class Bio {
         prompt(a, "Unlock your vault").authenticate(new BiometricPrompt.CryptoObject(c), new CancellationSignal(), a.getMainExecutor(),
                 new BiometricPrompt.AuthenticationCallback() {
                     @Override public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult r) {
+                        byte[] vk;
                         try {
-                            done.ok(r.getCryptoObject().getCipher().doFinal(ct));
+                            vk = r.getCryptoObject().getCipher().doFinal(ct);
                         } catch (Exception e) {
-                            done.failed("Biometric unlock failed");
+                            done.failed("Biometric unlock failed. Use your master password.");
+                            return;
                         }
+                        done.ok(vk);
                     }
 
                     @Override public void onAuthenticationError(int code, CharSequence msg) {
