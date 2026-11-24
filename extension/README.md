@@ -111,6 +111,9 @@ Then open the extension's options page and press **Test connection**: it walks t
 - Everything drawn into a page lives in a closed shadow root and reacts only to real clicks
   (`isTrusted`). No secret is written into the page except the value of the field being filled.
   The master password is typed only into the popup, never into a page.
+- A login saved for `https` offered on a plain `http` page of the same site is marked
+  *Not secure*; filling it (or copying its password from the popup) needs a second click on
+  *Fill anyway*, and only then does the extension send `allow_insecure` to `raypass.fill`.
 - The extension never calls the vault on its own (no badge counts on navigation), so Raypass's
   auto-lock still locks an idle vault.
 
