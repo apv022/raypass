@@ -1,0 +1,4 @@
+name,url,username,password,note
+github.com,https://github.com/login,octo,gh-secret,
+,https://www.example.com/,alice,"pa,ss""word",with a note
+,,,,

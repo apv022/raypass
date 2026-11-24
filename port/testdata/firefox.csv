@@ -1,0 +1,3 @@
+"url","username","password","httpRealm","formActionOrigin","guid","timeCreated","timeLastUsed","timePasswordChanged"
+"https://github.com","octo","gh-secret",,"https://github.com","{a}","1700000000000","1700000000000","1700000000000"
+"https://accounts.example.com","alice","s3cret",,"https://accounts.example.com","{b}","1700000000000","1700000000000","1700000000000"

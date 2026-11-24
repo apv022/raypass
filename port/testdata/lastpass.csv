@@ -1,0 +1,4 @@
+url,username,password,totp,extra,name,grouping,fav
+https://github.com/login,octo,gh-secret,JBSWY3DPEHPK3PXP,dev account,GitHub,Work\Code,1
+http://sn,,,,"NoteType:Server
+Hostname:db1",DB server,Servers,0
