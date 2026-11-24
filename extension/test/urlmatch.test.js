@@ -13,7 +13,7 @@ test('urlmatch: normalization', () => {
   assert.equal(U.parse('example.com.').host, 'example.com');
   assert.equal(U.parse(''), null);
   assert.equal(U.parse(null), null);
-  assert.equal(U.parse('mailto:a@b.c'), null);
+  assert.equal(U.parse('intranet').special, true, 'single-label names compare with their port');
   assert.deepEqual(U.parse('androidapp://com.example.App'), { scheme: 'androidapp', host: 'com.example.app', port: '', special: true });
 });
 
@@ -25,6 +25,10 @@ test('urlmatch: registrable domain', () => {
   assert.equal(U.registrableDomain('alice.github.io'), 'alice.github.io');
   assert.equal(U.registrableDomain('www.shop.com.au'), 'shop.com.au');
   assert.equal(U.registrableDomain('com'), 'com');
+  assert.equal(U.registrableDomain('x.alice.github.io'), 'alice.github.io');
+  assert.equal(U.registrableDomain('bucket.s3.amazonaws.com'), 'bucket.s3.amazonaws.com', 'longest suffix wins');
+  assert.equal(U.registrableDomain('a.b.amazonaws.com'), 'amazonaws.com');
+  assert.equal(U.registrableDomain('192.168.1.1'), '192.168.1.1');
 });
 
 test('urlmatch: matching and rank', () => {
@@ -45,6 +49,9 @@ test('urlmatch: matching and rank', () => {
   assert.equal(U.rank('https://evil-github.com', 'https://github.com'), 0);
   assert.equal(U.rank('https://github.com.evil.com', 'https://github.com'), 0);
   assert.ok(U.matches('example.com', 'https://www.example.com/'));
+  assert.equal(U.rank('example.com', 'https://www.example.com/'), 2, 'www. is the same host');
+  assert.equal(U.rank('http://nas:5000', 'http://nas:5000/x'), 2);
+  assert.equal(U.rank('http://nas:5000', 'http://nas:5001/'), 0);
 });
 
 test('urlmatch: frame policy', () => {

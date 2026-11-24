@@ -8,21 +8,29 @@
 (function (root) {
   'use strict';
 
-  // Public suffixes with more than one label. Anything not listed has a one-label suffix, so
-  // the registrable domain is the last two labels.
+  // Public suffixes with more than one label: the same list as urlmatch/suffixes.txt
+  // (cmd/extpack's test keeps them equal). Anything not listed has a one-label suffix, so the
+  // registrable domain is the last two labels.
   const MULTI = new Set([
-    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'ltd.uk', 'plc.uk', 'net.uk', 'sch.uk', 'nhs.uk',
-    'co.jp', 'ne.jp', 'or.jp', 'ac.jp', 'go.jp', 'ed.jp',
-    'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'id.au',
-    'co.nz', 'org.nz', 'net.nz', 'govt.nz', 'ac.nz',
-    'com.br', 'net.br', 'org.br', 'gov.br', 'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn',
-    'com.tw', 'org.tw', 'com.hk', 'org.hk', 'co.in', 'net.in', 'org.in', 'gov.in', 'ac.in',
-    'co.za', 'org.za', 'com.mx', 'org.mx', 'com.ar', 'com.tr', 'org.tr', 'co.kr', 'or.kr',
-    'com.sg', 'com.my', 'co.id', 'co.il', 'org.il', 'com.ua', 'com.pl', 'co.th', 'com.vn',
-    'com.ph', 'com.pk', 'com.eg', 'com.sa', 'com.co', 'com.pe', 'com.ng', 'co.ke', 'com.es',
-    'github.io', 'gitlab.io', 'herokuapp.com', 'vercel.app', 'netlify.app', 'pages.dev',
+    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'me.uk', 'net.uk', 'ltd.uk', 'plc.uk', 'sch.uk', 'nhs.uk',
+    'police.uk', 'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au', 'co.nz',
+    'org.nz', 'net.nz', 'govt.nz', 'ac.nz', 'co.jp', 'ne.jp', 'or.jp', 'ac.jp', 'go.jp', 'ad.jp',
+    'ed.jp', 'gr.jp', 'lg.jp', 'co.kr', 'or.kr', 'ne.kr', 'go.kr', 'ac.kr', 'co.in', 'net.in',
+    'org.in', 'firm.in', 'gen.in', 'ind.in', 'ac.in', 'gov.in', 'com.br', 'net.br', 'org.br',
+    'gov.br', 'edu.br', 'com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn', 'com.tw', 'org.tw',
+    'net.tw', 'edu.tw', 'gov.tw', 'com.hk', 'org.hk', 'net.hk', 'edu.hk', 'gov.hk', 'com.sg',
+    'org.sg', 'net.sg', 'edu.sg', 'gov.sg', 'com.my', 'org.my', 'net.my', 'com.mx', 'org.mx',
+    'gob.mx', 'edu.mx', 'com.ar', 'org.ar', 'gob.ar', 'com.tr', 'org.tr', 'gov.tr', 'edu.tr',
+    'co.za', 'org.za', 'gov.za', 'co.il', 'org.il', 'ac.il', 'gov.il', 'com.ua', 'org.ua', 'net.ua',
+    'co.id', 'or.id', 'ac.id', 'go.id', 'com.ph', 'org.ph', 'com.vn', 'net.vn', 'com.pk', 'org.pk',
+    'com.ng', 'org.ng', 'com.eg', 'com.sa', 'co.th', 'in.th', 'ac.th', 'go.th', 'com.co', 'com.pe',
+    'com.ve', 'co.at', 'or.at', 'com.pl', 'net.pl', 'org.pl', 'com.ru', 'com.es', 'org.es',
+    'com.gr', 'com.cy', 'com.mt', 'co.ke', 'com.bd', 'com.np', 'com.lk', 'github.io', 'gitlab.io',
+    'herokuapp.com', 'appspot.com', 'blogspot.com', 'netlify.app', 'vercel.app', 'pages.dev',
     'workers.dev', 'web.app', 'firebaseapp.com', 'azurewebsites.net', 'cloudfront.net',
-    'blogspot.com', 'appspot.com', 'onrender.com', 'fly.dev', 'glitch.me', 'repl.co',
+    's3.amazonaws.com', 'fly.dev', 'onrender.com', 'glitch.me', 'repl.co', 'ngrok.io',
+    'ngrok-free.app', 'myshopify.com', 'wordpress.com', 'tumblr.com', 'substack.com',
+    'sharepoint.com', 'ddns.net', 'duckdns.org', 'no-ip.org', 'dyndns.org',
   ]);
 
   const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -36,10 +44,7 @@
     if (typeof u !== 'string') return null;
     let s = u.trim();
     if (!s) return null;
-    // "example.com/login" and "example.com:8443" have no scheme; "mailto:x" has one.
-    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s) && !/^[a-zA-Z][a-zA-Z0-9+.-]*:(?!\d)/.test(s)) {
-      s = 'https://' + s;
-    }
+    if (!s.includes('://')) s = 'https://' + s;
     const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(s)[1].toLowerCase();
     if (scheme === 'androidapp') {
       const pkg = s.slice('androidapp://'.length).replace(/\/+$/, '');
@@ -51,19 +56,27 @@
     if (!host) return null;
     const v6 = host.startsWith('[');
     if (v6) host = host.slice(1, -1);
-    const special = v6 || IPV4.test(host) || host === 'localhost' || host.endsWith('.localhost');
+    const special = literal(host);
     let port = url.port;
     if (!port) port = scheme === 'http' ? '80' : scheme === 'https' ? '443' : '';
     return { scheme, host, port, special };
   }
 
-  /** The registrable domain (eTLD+1) of host, by the embedded suffix list. */
+  /** Hosts compared with their port, not by domain: IPs, localhost, single-label names. */
+  function literal(host) {
+    return host.includes(':') || IPV4.test(host) || host === 'localhost' || host.endsWith('.localhost') || !host.includes('.');
+  }
+
+  /** The registrable domain (eTLD+1) of host, by the embedded suffix list; the host itself for literal hosts. */
   function registrableDomain(host) {
-    const labels = String(host).toLowerCase().replace(/\.$/, '').split('.').filter(Boolean);
-    if (labels.length <= 2) return labels.join('.');
-    const last2 = labels.slice(-2).join('.');
-    const n = MULTI.has(last2) ? 3 : 2;
-    return labels.slice(-n).join('.');
+    host = String(host).toLowerCase().replace(/\.$/, '');
+    if (literal(host)) return host;
+    const labels = host.split('.');
+    // The longest known suffix wins (s3.amazonaws.com over amazonaws.com).
+    for (let i = 0; i < labels.length - 1; i++) {
+      if (MULTI.has(labels.slice(i + 1).join('.'))) return labels.slice(i).join('.');
+    }
+    return labels.slice(-2).join('.');
   }
 
   /** The key two URLs must share to match: registrable domain, or host:port for IPs/localhost. */
@@ -81,7 +94,8 @@
     if ((pa.scheme === 'androidapp') !== (pb.scheme === 'androidapp')) return 0;
     const ka = siteKey(pa);
     if (!ka || ka !== siteKey(pb)) return 0;
-    return pa.host === pb.host ? 2 : 1;
+    const bare = (h) => h.replace(/^www\./, '');
+    return pa.host === pb.host || bare(pa.host) === bare(pb.host) ? 2 : 1;
   }
 
   /** Whether item URL a matches page URL b. */

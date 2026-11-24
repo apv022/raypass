@@ -110,6 +110,36 @@ func TestChromeIDMatchesHost(t *testing.T) {
 	}
 }
 
+// The extension's copy of the public-suffix list is the urlmatch package's, so the extension's
+// frame policy and the vault's matching agree.
+func TestSuffixesMatchURLMatch(t *testing.T) {
+	txt, err := os.ReadFile("../../urlmatch/suffixes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, l := range strings.Split(string(txt), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(l), "#") {
+			want = append(want, strings.Fields(l)...)
+		}
+	}
+	js, err := os.ReadFile("../../extension/lib/urlmatch.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := regexp.MustCompile(`(?s)const MULTI = new Set\(\[(.*?)\]\);`).FindSubmatch(js)
+	if block == nil {
+		t.Fatal("no MULTI set in urlmatch.js")
+	}
+	var got []string
+	for _, m := range regexp.MustCompile(`'([^']+)'`).FindAllSubmatch(block[1], -1) {
+		got = append(got, string(m[1]))
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("extension/lib/urlmatch.js suffixes differ from urlmatch/suffixes.txt:\n%v\n%v", got, want)
+	}
+}
+
 func TestIDFromKnownKey(t *testing.T) {
 	if _, err := idFromKey("not base64!"); err == nil {
 		t.Fatal("bad key accepted")
