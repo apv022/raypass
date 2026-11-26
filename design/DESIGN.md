@@ -215,6 +215,12 @@ Notes fixed by the Go implementation (the table above is authoritative for shape
 
 - Approval: every action that reveals a secret **or changes the vault** is `approval: agents`, as
   the threat model says (only `raypass.lock` among the writes is not).
+- Every input that can carry a secret (master passwords, `pass`, `totp`, `cvv`, `number`,
+  `seed`, `privkey`, `passphrase`, `notes`, `fields`, import `data`, recovery `keyring`) is marked
+  `"secret": true`, and every action whose output reveals one (`get`, `fill`, `totp`, `export`,
+  `generate`) is `"output_secret": true`, so Sol keeps them out of its inbox on disk and shows
+  them as `••••` to the person approving (Sol API.md §8-9, needs Sol 0.2.0-beta.3).
+  `raypass.update` declares the secret fields untyped so they may still be null (clear).
 - `raypass.setup` and `raypass.change_password` refuse a new master password shorter than 8
   characters (`bad_request`). `setup` when a keyring exists: `conflict`. `unlock` or
   `change_password` with no vault: `not_found`. A wrong (old) password: `unauthorized`; the
