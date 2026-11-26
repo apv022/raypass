@@ -10,10 +10,12 @@ import java.util.Set;
  * (eTLD+1 with a short embedded list of multi-part public suffixes, else the last two labels) are
  * equal; IP addresses, localhost and single-label hosts need the same host and port; Android apps
  * are {@code androidapp://<package>} and match exactly. Domain matching is for http and https only:
- * any other scheme needs the same scheme, host and port. Ranking: same host (www. ignored) 0, same
- * registrable domain 1, no match -1. Mirrors the Go app's urlmatch package rule for rule, with
- * its suffix list loaded from urlmatch/suffixes.txt ({@link #loadSuffixes}). Pure Java so the
- * autofill matching is tested on the JDK.
+ * any other scheme needs the same scheme, host and port. A few groups of registrable domains are one
+ * account (urlmatch/equivalent.txt: x.com and twitter.com, …) and match each other. Ranking: same
+ * host (www. ignored) 0, same registrable domain 1, equivalent domains 2, no match -1. Mirrors the
+ * Go app's urlmatch package rule for rule, with its suffix list and equivalent groups loaded from
+ * urlmatch/suffixes.txt and urlmatch/equivalent.txt ({@link #loadSuffixes}, {@link
+ * #loadEquivalent}). Pure Java so the autofill matching is tested on the JDK.
  */
 public final class UrlMatch {
     private UrlMatch() {}
@@ -43,6 +45,48 @@ public final class UrlMatch {
             "up.railway.app", "hf.space", "streamlit.app", "ngrok.io", "ngrok.app", "ngrok-free.app", "loca.lt",
             "myshopify.com", "wordpress.com", "tumblr.com", "substack.com", "webflow.io", "neocities.org",
             "000webhostapp.com", "sharepoint.com", "ddns.net", "duckdns.org", "no-ip.org", "dyndns.org"));
+
+    /**
+     * The built-in copy of urlmatch/equivalent.txt, one group per string (android/test.sh checks
+     * they are equal), used until {@link #loadEquivalent} reads res/raw/equivalent.txt.
+     */
+    public static final java.util.List<String> BUILTIN_EQUIVALENT = java.util.Collections.unmodifiableList(Arrays.asList(
+            "x.com twitter.com",
+            "google.com youtube.com gmail.com",
+            "microsoft.com live.com outlook.com hotmail.com xbox.com office.com",
+            "apple.com icloud.com",
+            "facebook.com messenger.com"));
+
+    /** Registrable domain → its group number in the equivalent groups in use. */
+    static final java.util.Map<String, Integer> GROUPS = groups(BUILTIN_EQUIVALENT);
+
+    private static java.util.Map<String, Integer> groups(java.util.List<String> lines) {
+        java.util.Map<String, Integer> out = new java.util.HashMap<>();
+        int n = 0;
+        for (String line : lines) {
+            n++;
+            if (line.trim().startsWith("#")) continue;
+            for (String d : line.trim().split("\\s+")) if (!d.isEmpty()) out.put(d.toLowerCase(Locale.ROOT), n);
+        }
+        return out;
+    }
+
+    /** Replaces the equivalent groups with urlmatch/equivalent.txt (one group per line, "#" comments). */
+    public static synchronized void loadEquivalent(java.io.InputStream in) throws java.io.IOException {
+        java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+        java.util.List<String> lines = new java.util.ArrayList<>();
+        for (String line; (line = r.readLine()) != null; ) lines.add(line);
+        java.util.Map<String, Integer> g = groups(lines);
+        if (g.isEmpty()) throw new java.io.IOException("empty equivalent list");
+        GROUPS.clear();
+        GROUPS.putAll(g);
+    }
+
+    /** Whether two registrable domains differ but are in one equivalent group (one account works on both). */
+    public static boolean equivalent(String a, String b) {
+        Integer ga = GROUPS.get(a.toLowerCase(Locale.ROOT)), gb = GROUPS.get(b.toLowerCase(Locale.ROOT));
+        return ga != null && ga.equals(gb) && !a.equalsIgnoreCase(b);
+    }
 
     /** Multi-part public suffixes in use: {@link #BUILTIN} until {@link #loadSuffixes}. */
     static final Set<String> SUFFIXES = new HashSet<>(BUILTIN);
@@ -161,7 +205,10 @@ public final class UrlMatch {
 
     private static String noWww(String h) { return h.startsWith("www.") ? h.substring(4) : h; }
 
-    /** 0: same host (www. ignored); 1: same registrable domain; -1: no match (Go's Match 2/1/0). */
+    /**
+     * 0: same host (www. ignored) or app; 1: same registrable domain; 2: equivalent domains; -1: no
+     * match (Go's Match 3/2/1/0).
+     */
     public static int rank(String itemUrl, String target) {
         Url a = parse(itemUrl), b = parse(target);
         if (a == null || b == null) return -1;
@@ -175,7 +222,9 @@ public final class UrlMatch {
         }
         if (isIpOrLocal(a.host) || isIpOrLocal(b.host)) return a.host.equals(b.host) && a.port.equals(b.port) ? 0 : -1;
         if (a.host.equals(b.host) || noWww(a.host).equals(noWww(b.host))) return 0;
-        return registrable(a.host).equals(registrable(b.host)) ? 1 : -1;
+        String ra = registrable(a.host), rb = registrable(b.host);
+        if (ra.equals(rb)) return 1;
+        return equivalent(ra, rb) ? 2 : -1;
     }
 
     /** Reports whether the two URLs match. */

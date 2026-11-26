@@ -21,6 +21,20 @@ final class UrlMatchTest {
             }
             eq(want.toString(), UrlMatch.BUILTIN.toString(), "UrlMatch.BUILTIN is a copy of urlmatch/suffixes.txt");
         }});
+        test("url: the built-in equivalent groups equal ../urlmatch/equivalent.txt", new T.Case() { public void run() throws Exception {
+            java.util.List<String> want = new java.util.ArrayList<>();
+            for (String line : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(root, "urlmatch", "equivalent.txt"), java.nio.charset.StandardCharsets.UTF_8)) {
+                if (line.trim().startsWith("#") || line.trim().isEmpty()) continue;
+                want.add(line.trim().replaceAll("\\s+", " "));
+            }
+            eq(want.toString(), UrlMatch.BUILTIN_EQUIVALENT.toString(), "UrlMatch.BUILTIN_EQUIVALENT is a copy of urlmatch/equivalent.txt");
+            try (java.io.InputStream in = new java.io.FileInputStream(java.nio.file.Paths.get(root, "urlmatch", "equivalent.txt").toFile())) {
+                UrlMatch.loadEquivalent(in);
+            }
+            check(UrlMatch.equivalent("x.com", "twitter.com"), "x.com ~ twitter.com");
+            check(!UrlMatch.equivalent("x.com", "x.com"), "a domain is not equivalent to itself (that is a same-domain match)");
+            check(!UrlMatch.equivalent("x.com", "google.com"), "different groups");
+        }});
         test("url: the Go urlmatch test table", new T.Case() { public void run() {
             String[][] parse = {{"GitHub.com", "https://github.com"}, {"HTTP://Example.COM.:8080/x?y=1", "http://example.com:8080"},
                     {"https://[::1]:9000/", "https://[::1]:9000"}, {"androidapp://com.Example.App", "androidapp://com.example.app"},
@@ -30,29 +44,39 @@ final class UrlMatchTest {
                     {"alice.github.io", "alice.github.io"}, {"x.alice.github.io", "alice.github.io"}, {"localhost", "localhost"},
                     {"192.168.1.1", "192.168.1.1"}, {"co.uk", "co.uk"}, {"nas", "nas"}};
             for (String[] c : reg) eq(c[1], UrlMatch.registrable(c[0]), "registrable " + c[0]);
-            Object[][] m = {{"https://github.com", "https://github.com/login", 2}, {"github.com", "https://www.github.com/", 2},
-                    {"https://github.com", "https://gist.github.com", 1}, {"https://github.com", "http://github.com", 2},
+            Object[][] m = {{"https://github.com", "https://github.com/login", 3}, {"github.com", "https://www.github.com/", 3},
+                    {"https://github.com", "https://gist.github.com", 2}, {"https://github.com", "http://github.com", 3},
                     {"https://github.com", "https://github.com.evil.com", 0}, {"https://evilgithub.com", "https://github.com", 0},
-                    {"https://alice.github.io", "https://bob.github.io", 0}, {"https://shop.example.co.uk", "https://login.example.co.uk", 1},
-                    {"https://a.co.uk", "https://b.co.uk", 0}, {"http://192.168.1.1:8080", "http://192.168.1.1:8080/admin", 2},
-                    {"http://192.168.1.1:8080", "http://192.168.1.1:8081", 0}, {"http://localhost:3000", "http://localhost:3000/x", 2},
-                    {"http://localhost:3000", "http://localhost:4000", 0}, {"androidapp://com.example.app", "androidapp://com.example.app", 2},
+                    {"https://alice.github.io", "https://bob.github.io", 0}, {"https://shop.example.co.uk", "https://login.example.co.uk", 2},
+                    {"https://a.co.uk", "https://b.co.uk", 0}, {"http://192.168.1.1:8080", "http://192.168.1.1:8080/admin", 3},
+                    {"http://192.168.1.1:8080", "http://192.168.1.1:8081", 0}, {"http://localhost:3000", "http://localhost:3000/x", 3},
+                    {"http://localhost:3000", "http://localhost:4000", 0}, {"androidapp://com.example.app", "androidapp://com.example.app", 3},
                     {"androidapp://com.example.app", "androidapp://com.example.app2", 0}, {"androidapp://com.example", "https://example.com", 0},
                     {"", "https://x.com", 0},
                     // Not web pages: the host alone must not let a login fill.
                     {"https://bank.com", "javascript://bank.com/%0aalert(1)", 0}, {"https://bank.com", "ftp://bank.com", 0},
                     {"https://bank.com", "data://bank.com/x", 0}, {"https://bank.com", "javascript:alert(1)", 0},
-                    {"https://bank.com", "data:text/html,https://bank.com", 0}, {"ftp://files.example.com", "ftp://files.example.com/pub", 2},
+                    {"https://bank.com", "data:text/html,https://bank.com", 0}, {"ftp://files.example.com", "ftp://files.example.com/pub", 3},
                     {"ftp://files.example.com", "https://files.example.com", 0},
                     // Userinfo is not the host; trailing dots and case do not matter.
-                    {"https://bank.com", "https://bank.com@evil.com/", 0}, {"https://bank.com", "https://evil.com@bank.com/", 2},
-                    {"https://bank.com", "HTTPS://BANK.COM./login", 2}, {"https://bank.com", "https://bank.com.evil.com.", 0},
+                    {"https://bank.com", "https://bank.com@evil.com/", 0}, {"https://bank.com", "https://evil.com@bank.com/", 3},
+                    {"https://bank.com", "HTTPS://BANK.COM./login", 3}, {"https://bank.com", "https://bank.com.evil.com.", 0},
                     // Private suffixes: every customer of a host is a different site.
                     {"https://alice.herokuapp.com", "https://bob.herokuapp.com", 0},
-                    {"https://shop.myshopify.com", "https://admin.shop.myshopify.com", 1},
-                    {"https://a.up.railway.app", "https://b.up.railway.app", 0}};
-            for (Object[] c : m) eq(2 - (Integer) c[2], UrlMatch.rank((String) c[0], (String) c[1]) == -1 ? 2 : UrlMatch.rank((String) c[0], (String) c[1]),
-                    "match " + c[0] + " vs " + c[1]);
+                    {"https://shop.myshopify.com", "https://admin.shop.myshopify.com", 2},
+                    {"https://a.up.railway.app", "https://b.up.railway.app", 0},
+                    // Equivalent domains (equivalent.txt): one account, ranked below the same domain.
+                    {"https://x.com", "https://twitter.com/login", 1}, {"https://twitter.com", "https://mobile.x.com", 1},
+                    {"https://accounts.google.com", "https://www.youtube.com", 1}, {"https://login.live.com", "https://outlook.com", 1},
+                    {"https://icloud.com", "https://appleid.apple.com", 1}, {"https://x.com", "https://twitter.com.evil.com", 0},
+                    {"https://x.com", "https://facebook.com", 0}, {"https://facebook.com", "https://instagram.com", 0},
+                    {"https://x.com", "ftp://twitter.com", 0}, {"androidapp://com.twitter.android", "https://x.com", 0},
+                    {"https://x.com", "http://twitter.com", 1}};
+            // Go's scores 3/2/1/0 are ranks 0/1/2/-1 here.
+            for (Object[] c : m) {
+                int r = UrlMatch.rank((String) c[0], (String) c[1]);
+                eq((Integer) c[2], r < 0 ? 0 : 3 - r, "match " + c[0] + " vs " + c[1]);
+            }
         }});
         test("autofill target: web domain only from known browsers", new T.Case() { public void run() {
             eq("https://github.com", app.raypass.core.AutofillTarget.url("com.android.chrome", "GitHub.com", null), "browser");

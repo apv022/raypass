@@ -1,7 +1,7 @@
 // Package port reads other password managers' exports and writes Raypass's own (design/DESIGN.md
 // "Import" and "Export"): Bitwarden JSON (unencrypted) and CSV, Chrome/Edge/Brave CSV, Firefox
-// CSV, 1Password CSV, KeePass(XC) CSV, LastPass CSV, Raypass JSON and the encrypted Raypass
-// export; exports are Raypass JSON, CSV (Bitwarden's CSV layout, so other managers can read it)
+// CSV, 1Password CSV, KeePass(XC) CSV, LastPass CSV, Proton Pass JSON (data.json or the zip)
+// and CSV, Raypass JSON and the encrypted Raypass export; exports are Raypass JSON, CSV (Bitwarden's CSV layout, so other managers can read it)
 // and the encrypted Raypass export.
 //
 // Invariants: parsing is pure (no I/O, no network); errors name the format or the row, never a
@@ -28,6 +28,8 @@ const (
 	OnePasswordCSV    = "1password_csv"
 	KeePassCSV        = "keepass_csv"
 	LastPassCSV       = "lastpass_csv"
+	ProtonPassJSON    = "protonpass_json" // data.json, or the whole export zip
+	ProtonPassCSV     = "protonpass_csv"
 	RaypassJSON       = "raypass_json"
 	RaypassEncrypted  = "raypass_encrypted"
 	exportFormatJSON  = "json"
@@ -40,6 +42,9 @@ type Result struct {
 	Format  string
 	Items   []vault.Item // ID is set only for Raypass JSON (kept so a re-import is idempotent)
 	Skipped int
+	// Notes say what the file held that could not become an item and is not in Skipped
+	// (passkeys, trashed items, attachments), e.g. "3 passkeys were not imported".
+	Notes []string
 }
 
 // Error is an import error; its text never contains data from the file.
@@ -64,6 +69,10 @@ func Import(format string, data []byte, password string, minIter int) (Result, e
 		r, err = bitwardenJSON(data)
 	case RaypassJSON:
 		r, err = raypassJSON(data)
+	case ProtonPassJSON:
+		r, err = protonPassJSON(data)
+	case ProtonPassCSV:
+		r, err = protonPassCSV(data)
 	case RaypassEncrypted:
 		if password == "" {
 			return Result{}, Error("this export is encrypted: pass its password")
@@ -90,9 +99,15 @@ func Import(format string, data []byte, password string, minIter int) (Result, e
 	return r, err
 }
 
-// Detect guesses the format of an export, "" when it cannot tell.
+// Detect guesses the format of an export, "" when it cannot tell. A zip or an armored PGP
+// message is taken for a Proton Pass export (the only such format Raypass reads; the import
+// then says what is wrong with it).
 func Detect(data []byte) string {
-	data = bytes.TrimSpace(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")))
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+	if isProtonZipOrPGP(data) {
+		return ProtonPassJSON
+	}
+	data = bytes.TrimSpace(data)
 	if len(data) > 0 && data[0] == '{' {
 		if vault.IsExportFile(data) {
 			return RaypassEncrypted
@@ -106,6 +121,9 @@ func Detect(data []byte) string {
 		}
 		if _, ok := probe["items"]; ok {
 			return BitwardenJSON
+		}
+		if _, ok := probe["vaults"]; ok {
+			return ProtonPassJSON
 		}
 		return ""
 	}
@@ -129,6 +147,8 @@ func Detect(data []byte) string {
 		return OnePasswordCSV
 	case (h["group"] && h["title"]) || (h["account"] && h["login name"]):
 		return KeePassCSV
+	case h["type"] && h["name"] && h["note"] && h["createtime"] && h["modifytime"]:
+		return ProtonPassCSV
 	case h["url"] && h["username"] && h["password"]:
 		return ChromeCSV
 	}
