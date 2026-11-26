@@ -251,7 +251,20 @@ suffixes: `co.uk`, `com.au`, `co.jp`, `github.io`, … ; else last two labels), 
 addresses and `localhost`, host and port are equal. Android apps are URLs `androidapp://<package>`
 and match exactly. Registrable-domain matching is for `http`/`https` only: a URL with any other
 scheme (`javascript://bank.com/`, `ftp://bank.com`) matches only the same scheme, host and port.
-Best-match ordering: exact host, then same registrable domain; then by name.
+
+**Equivalent domains.** A few groups of registrable domains are one account
+(`urlmatch/equivalent.txt`, one group per line: `x.com twitter.com`; `google.com youtube.com
+gmail.com`; `microsoft.com live.com outlook.com hotmail.com xbox.com office.com`; `apple.com
+icloud.com`; `facebook.com messenger.com`). Two web URLs whose registrable domains are different
+members of one group match, ranked below a same-domain match. Only groups where the same sign-in
+clearly works everywhere are listed: no regional shops (amazon.de is not amazon.com), no sister
+apps with their own accounts (instagram.com). The Go app, the extension (`lib/urlmatch.js`) and
+Android (`core/UrlMatch.java`, packed as `res/raw/equivalent.txt`) use the same file; tests keep
+the copies equal. The extension's frame policy (which frames may be filled) still uses the
+registrable domain alone.
+
+Scores (`urlmatch.Match`): 3 same host (`www.` ignored) or the same app, 2 same registrable
+domain, 1 equivalent domains, 0 no match. Best-match ordering: highest score, then by name.
 
 **Insecure pages.** A login whose matching URLs are all `https` offered on a plain `http` page
 of the same site (a downgraded or misconfigured page: anyone on the network reads what is

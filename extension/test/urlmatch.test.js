@@ -32,29 +32,30 @@ test('urlmatch: registrable domain', () => {
 });
 
 test('urlmatch: matching and rank', () => {
-  assert.equal(U.rank('https://github.com', 'https://github.com/login'), 2);
-  assert.equal(U.rank('github.com', 'https://gist.github.com/'), 1);
-  assert.equal(U.rank('https://github.com', 'http://github.com'), 2, 'scheme does not matter');
+  assert.equal(U.rank('https://github.com', 'https://github.com/login'), 3);
+  assert.equal(U.rank('github.com', 'https://gist.github.com/'), 2);
+  assert.equal(U.rank('https://github.com', 'http://github.com'), 3, 'scheme does not matter');
   assert.equal(U.rank('https://alice.github.io', 'https://bob.github.io'), 0, 'github.io is a public suffix');
-  assert.equal(U.rank('https://a.example.co.uk', 'https://b.example.co.uk'), 1);
+  assert.equal(U.rank('https://a.example.co.uk', 'https://b.example.co.uk'), 2);
   assert.equal(U.rank('https://example.co.uk', 'https://other.co.uk'), 0);
-  assert.equal(U.rank('http://192.168.1.1', 'http://192.168.1.1/admin'), 2);
+  assert.equal(U.rank('http://192.168.1.1', 'http://192.168.1.1/admin'), 3);
   assert.equal(U.rank('http://192.168.1.1:8080', 'http://192.168.1.1'), 0, 'IPs match on host and port');
-  assert.equal(U.rank('localhost:3000', 'http://localhost:3000/'), 2, 'explicit ports agree whatever the scheme');
+  assert.equal(U.rank('localhost:3000', 'http://localhost:3000/'), 3, 'explicit ports agree whatever the scheme');
   assert.equal(U.rank('localhost', 'http://localhost/'), 0, 'default ports differ: https 443, http 80');
-  assert.equal(U.rank('http://localhost:3000', 'http://localhost:3000/'), 2);
+  assert.equal(U.rank('http://localhost:3000', 'http://localhost:3000/'), 3);
   assert.equal(U.rank('http://localhost:3000', 'http://localhost:4000/'), 0);
-  assert.equal(U.rank('androidapp://com.example', 'androidapp://com.example'), 2);
+  assert.equal(U.rank('androidapp://com.example', 'androidapp://com.example'), 3);
   assert.equal(U.rank('androidapp://com.example', 'https://example.com'), 0);
   assert.equal(U.rank('https://evil-github.com', 'https://github.com'), 0);
   assert.equal(U.rank('https://github.com.evil.com', 'https://github.com'), 0);
   assert.ok(U.matches('example.com', 'https://www.example.com/'));
-  assert.equal(U.rank('example.com', 'https://www.example.com/'), 2, 'www. is the same host');
-  assert.equal(U.rank('http://nas:5000', 'http://nas:5000/x'), 2);
+  assert.equal(U.rank('example.com', 'https://www.example.com/'), 3, 'www. is the same host');
+  assert.equal(U.rank('http://nas:5000', 'http://nas:5000/x'), 3);
   assert.equal(U.rank('http://nas:5000', 'http://nas:5001/'), 0);
 });
 
 test('urlmatch: frame policy', () => {
+  assert.ok(!U.sameSite('https://twitter.com/', 'https://x.com/'), 'equivalent domains are still different sites for frames');
   assert.ok(U.sameSite('https://login.example.com/frame', 'https://www.example.com/'));
   assert.ok(!U.sameSite('https://ads.tracker.net/', 'https://www.example.com/'));
   assert.ok(!U.sameSite('about:blank', 'https://www.example.com/'));
@@ -69,20 +70,20 @@ test('urlmatch: frame policy', () => {
 // The urlmatch package's TestMatch table, case for case, so Go and the extension agree.
 test('urlmatch: the Go TestMatch table', () => {
   const cases = [
-    ['https://github.com', 'https://github.com/login', 2],
-    ['github.com', 'https://www.github.com/', 2],
-    ['https://github.com', 'https://gist.github.com', 1],
-    ['https://github.com', 'http://github.com', 2],
+    ['https://github.com', 'https://github.com/login', 3],
+    ['github.com', 'https://www.github.com/', 3],
+    ['https://github.com', 'https://gist.github.com', 2],
+    ['https://github.com', 'http://github.com', 3],
     ['https://github.com', 'https://github.com.evil.com', 0],
     ['https://evilgithub.com', 'https://github.com', 0],
     ['https://alice.github.io', 'https://bob.github.io', 0],
-    ['https://shop.example.co.uk', 'https://login.example.co.uk', 1],
+    ['https://shop.example.co.uk', 'https://login.example.co.uk', 2],
     ['https://a.co.uk', 'https://b.co.uk', 0],
-    ['http://192.168.1.1:8080', 'http://192.168.1.1:8080/admin', 2],
+    ['http://192.168.1.1:8080', 'http://192.168.1.1:8080/admin', 3],
     ['http://192.168.1.1:8080', 'http://192.168.1.1:8081', 0],
-    ['http://localhost:3000', 'http://localhost:3000/x', 2],
+    ['http://localhost:3000', 'http://localhost:3000/x', 3],
     ['http://localhost:3000', 'http://localhost:4000', 0],
-    ['androidapp://com.example.app', 'androidapp://com.example.app', 2],
+    ['androidapp://com.example.app', 'androidapp://com.example.app', 3],
     ['androidapp://com.example.app', 'androidapp://com.example.app2', 0],
     ['androidapp://com.example', 'https://example.com', 0],
     ['', 'https://x.com', 0],
@@ -92,17 +93,29 @@ test('urlmatch: the Go TestMatch table', () => {
     ['https://bank.com', 'data://bank.com/x', 0],
     ['https://bank.com', 'javascript:alert(1)', 0],
     ['https://bank.com', 'data:text/html,https://bank.com', 0],
-    ['ftp://files.example.com', 'ftp://files.example.com/pub', 2],
+    ['ftp://files.example.com', 'ftp://files.example.com/pub', 3],
     ['ftp://files.example.com', 'https://files.example.com', 0],
     // Userinfo is not the host; trailing dots and case do not matter.
     ['https://bank.com', 'https://bank.com@evil.com/', 0],
-    ['https://bank.com', 'https://evil.com@bank.com/', 2],
-    ['https://bank.com', 'HTTPS://BANK.COM./login', 2],
+    ['https://bank.com', 'https://evil.com@bank.com/', 3],
+    ['https://bank.com', 'HTTPS://BANK.COM./login', 3],
     ['https://bank.com', 'https://bank.com.evil.com.', 0],
     // Private suffixes: every customer of a host is a different site.
     ['https://alice.herokuapp.com', 'https://bob.herokuapp.com', 0],
-    ['https://shop.myshopify.com', 'https://admin.shop.myshopify.com', 1],
+    ['https://shop.myshopify.com', 'https://admin.shop.myshopify.com', 2],
     ['https://a.up.railway.app', 'https://b.up.railway.app', 0],
+    // Equivalent domains (equivalent.txt): one account, ranked below the same domain.
+    ['https://x.com', 'https://twitter.com/login', 1],
+    ['https://twitter.com', 'https://mobile.x.com', 1],
+    ['https://accounts.google.com', 'https://www.youtube.com', 1],
+    ['https://login.live.com', 'https://outlook.com', 1],
+    ['https://icloud.com', 'https://appleid.apple.com', 1],
+    ['https://x.com', 'https://twitter.com.evil.com', 0],
+    ['https://x.com', 'https://facebook.com', 0],
+    ['https://facebook.com', 'https://instagram.com', 0],
+    ['https://x.com', 'ftp://twitter.com', 0],
+    ['androidapp://com.twitter.android', 'https://x.com', 0],
+    ['https://x.com', 'http://twitter.com', 1],
   ];
   for (const [a, b, want] of cases) assert.equal(U.rank(a, b), want, `rank(${a}, ${b})`);
 });

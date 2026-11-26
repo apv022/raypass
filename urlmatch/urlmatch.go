@@ -6,6 +6,8 @@
 // public suffixes, else the last two labels) are equal; for IP addresses and localhost, host
 // and port must be equal. Any other scheme matches only the same scheme, host and port (so
 // javascript://bank.com/ is not bank.com). Android apps are androidapp://<package> and match exactly.
+// A few groups of registrable domains share one account (equivalent.txt: x.com and twitter.com,
+// …); a web URL under one matches a web URL under another, ranked below any same-domain match.
 // A login saved with an https URL that matches an http page is Insecure: clients warn before
 // filling it.
 //
@@ -22,7 +24,13 @@ import (
 //go:embed suffixes.txt
 var suffixesTxt string
 
+//go:embed equivalent.txt
+var equivalentTxt string
+
 var suffixes = map[string]bool{}
+
+// group maps a registrable domain of equivalent.txt to its group's number (its line).
+var group = map[string]int{}
 
 func init() {
 	for _, line := range strings.Split(suffixesTxt, "\n") {
@@ -33,6 +41,29 @@ func init() {
 			suffixes[strings.ToLower(s)] = true
 		}
 	}
+	for n, line := range strings.Split(equivalentTxt, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		for _, d := range strings.Fields(line) {
+			group[strings.ToLower(d)] = n + 1
+		}
+	}
+}
+
+// Match scores, best first. Callers compare scores (higher is better) or test for NoMatch.
+const (
+	NoMatch    = 0 // not the same site
+	Equivalent = 1 // registrable domains in one group of equivalent.txt (x.com and twitter.com)
+	SameDomain = 2 // the same registrable domain (gist.github.com and github.com)
+	SameHost   = 3 // the same host, www. ignored, or the same app
+)
+
+// EquivalentDomains reports whether two registrable domains are different domains of one group in
+// equivalent.txt (the same account works on both).
+func EquivalentDomains(a, b string) bool {
+	ga, gb := group[strings.ToLower(a)], group[strings.ToLower(b)]
+	return ga != 0 && ga == gb && !strings.EqualFold(a, b)
 }
 
 // URL is a normalized URL.
@@ -132,8 +163,7 @@ func Host(raw string) string {
 	return u.Host
 }
 
-// Match scores how well saved matches page: 0 no match, 1 same registrable domain, 2 the same
-// host (or the same app).
+// Match scores how well saved matches page: NoMatch, Equivalent, SameDomain or SameHost.
 func Match(saved, page string) int {
 	a, ok1 := Parse(saved)
 	b, ok2 := Parse(page)
@@ -142,32 +172,36 @@ func Match(saved, page string) int {
 	}
 	if a.Android != "" || b.Android != "" {
 		if a.Android != "" && a.Android == b.Android {
-			return 2
+			return SameHost
 		}
-		return 0
+		return NoMatch
 	}
 	// Registrable-domain matching is for web pages only. A javascript://bank.com/ or
 	// ftp://bank.com URL has bank.com as its host but is not the bank's page: anything not
 	// http(s) on either side matches only the same scheme, host and port.
 	if !web(a.Scheme) || !web(b.Scheme) {
 		if a.Scheme == b.Scheme && a.Host == b.Host && a.Port == b.Port {
-			return 2
+			return SameHost
 		}
-		return 0
+		return NoMatch
 	}
 	if literal(a.Host) || literal(b.Host) {
 		if a.Host == b.Host && a.Port == b.Port {
-			return 2
+			return SameHost
 		}
-		return 0
+		return NoMatch
 	}
 	if a.Host == b.Host || strings.TrimPrefix(a.Host, "www.") == strings.TrimPrefix(b.Host, "www.") {
-		return 2
+		return SameHost
 	}
-	if Registrable(a.Host) == Registrable(b.Host) {
-		return 1
+	ra, rb := Registrable(a.Host), Registrable(b.Host)
+	if ra == rb {
+		return SameDomain
 	}
-	return 0
+	if EquivalentDomains(ra, rb) {
+		return Equivalent
+	}
+	return NoMatch
 }
 
 // web reports the schemes of web pages, which match by registrable domain.

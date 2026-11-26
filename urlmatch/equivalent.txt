@@ -1,0 +1,11 @@
+# Equivalent domains: each line is a group of registrable domains that share one account, so a
+# login saved for any of them is offered on all of them (ranked below a same-domain match). Kept
+# short on purpose: only groups where the same sign-in clearly works on every domain. Regional
+# shops (amazon.de vs amazon.com) and sister apps with their own accounts (instagram.com) are not
+# here. Shared by the Go app, the extension (lib/urlmatch.js) and Android (core/UrlMatch.java);
+# tests keep the three copies equal.
+x.com twitter.com
+google.com youtube.com gmail.com
+microsoft.com live.com outlook.com hotmail.com xbox.com office.com
+apple.com icloud.com
+facebook.com messenger.com

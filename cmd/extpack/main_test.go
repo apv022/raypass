@@ -140,6 +140,39 @@ func TestSuffixesMatchURLMatch(t *testing.T) {
 	}
 }
 
+// The extension's equivalent-domain groups are urlmatch/equivalent.txt's, line for line.
+func TestEquivalentMatchesURLMatch(t *testing.T) {
+	txt, err := os.ReadFile("../../urlmatch/equivalent.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, l := range strings.Split(string(txt), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(l), "#") && strings.TrimSpace(l) != "" {
+			want = append(want, strings.Join(strings.Fields(l), " "))
+		}
+	}
+	js, err := os.ReadFile("../../extension/lib/urlmatch.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := regexp.MustCompile(`(?s)const EQUIVALENT = \[(.*?)\n  \];`).FindSubmatch(js)
+	if block == nil {
+		t.Fatal("no EQUIVALENT list in urlmatch.js")
+	}
+	var got []string
+	for _, g := range regexp.MustCompile(`\[([^\]]*)\]`).FindAllSubmatch(block[1], -1) {
+		var ds []string
+		for _, m := range regexp.MustCompile(`'([^']+)'`).FindAllSubmatch(g[1], -1) {
+			ds = append(ds, string(m[1]))
+		}
+		got = append(got, strings.Join(ds, " "))
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("extension/lib/urlmatch.js EQUIVALENT differs from urlmatch/equivalent.txt:\n%v\n%v", got, want)
+	}
+}
+
 func TestIDFromKnownKey(t *testing.T) {
 	if _, err := idFromKey("not base64!"); err == nil {
 		t.Fatal("bad key accepted")

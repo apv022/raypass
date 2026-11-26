@@ -38,6 +38,25 @@
     'duckdns.org', 'no-ip.org', 'dyndns.org',
   ]);
 
+  // Groups of registrable domains that share one account: the same groups as
+  // urlmatch/equivalent.txt (cmd/extpack's test keeps them equal). A login saved under one is
+  // offered under the others, ranked below a same-domain match.
+  const EQUIVALENT = [
+    ['x.com', 'twitter.com'],
+    ['google.com', 'youtube.com', 'gmail.com'],
+    ['microsoft.com', 'live.com', 'outlook.com', 'hotmail.com', 'xbox.com', 'office.com'],
+    ['apple.com', 'icloud.com'],
+    ['facebook.com', 'messenger.com'],
+  ];
+  const GROUP = new Map();
+  EQUIVALENT.forEach((g, i) => { for (const d of g) GROUP.set(d, i + 1); });
+
+  /** Whether registrable domains a and b differ but are in one group of EQUIVALENT. */
+  function equivalent(a, b) {
+    const ga = GROUP.get(a), gb = GROUP.get(b);
+    return !!ga && ga === gb && a !== b;
+  }
+
   const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 
   /**
@@ -92,7 +111,10 @@
     return registrableDomain(p.host);
   }
 
-  /** How well item URL a matches page URL b: 2 same host, 1 same site, 0 no match. */
+  /**
+   * How well item URL a matches page URL b, like urlmatch.Match: 3 same host (or app), 2 same
+   * registrable domain, 1 equivalent domains (x.com and twitter.com), 0 no match.
+   */
   function rank(a, b) {
     const pa = parse(a), pb = parse(b);
     if (!pa || !pb) return 0;
@@ -101,12 +123,13 @@
     // ftp://bank.com has bank.com as its host but is not the bank's page. Anything not http(s)
     // on either side matches only the same scheme, host and port.
     if (pa.scheme !== 'androidapp' && (!web(pa.scheme) || !web(pb.scheme))) {
-      return pa.scheme === pb.scheme && pa.host === pb.host && pa.port === pb.port ? 2 : 0;
+      return pa.scheme === pb.scheme && pa.host === pb.host && pa.port === pb.port ? 3 : 0;
     }
-    const ka = siteKey(pa);
-    if (!ka || ka !== siteKey(pb)) return 0;
+    const ka = siteKey(pa), kb = siteKey(pb);
+    if (ka && kb && ka !== kb && !pa.special && !pb.special && pa.scheme !== 'androidapp' && equivalent(ka, kb)) return 1;
+    if (!ka || ka !== kb) return 0;
     const bare = (h) => h.replace(/^www\./, '');
-    return pa.host === pb.host || bare(pa.host) === bare(pb.host) ? 2 : 1;
+    return pa.host === pb.host || bare(pa.host) === bare(pb.host) ? 3 : 2;
   }
 
   /** The schemes of web pages, which match by registrable domain. */
@@ -139,5 +162,5 @@
   }
 
   const ns = root.Raypass || (root.Raypass = {});
-  ns.url = { parse, registrableDomain, rank, matches, sameSite, fillable, displayHost };
+  ns.url = { parse, registrableDomain, equivalent, rank, matches, sameSite, fillable, displayHost };
 })(globalThis);
