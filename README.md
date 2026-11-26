@@ -22,7 +22,8 @@ The contract (crypto format, item model, actions, extension and Android protocol
   trash with restore and purge.
 - **Health report**: weak, reused and old passwords, with a score.
 - **Import and export**: imports from Bitwarden (JSON and CSV), Chrome, Edge and Brave,
-  Firefox, 1Password, KeePass and KeePassXC, LastPass, and Raypass's own formats. Exports to
+  Firefox, 1Password, KeePass and KeePassXC, LastPass, Proton Pass (the export zip or CSV),
+  and Raypass's own formats. Exports to
   Raypass JSON, CSV (Bitwarden layout) and a password-protected encrypted file. Exact
   duplicates are skipped on import.
 - **Sync**: two Sol feeds (`keys` and `vault`) hold CRDT operations, so edits made on several
@@ -121,6 +122,28 @@ adb install -r android/build/raypass.apk
 3. **Turn on autofill.** In Raypass's Settings, tap **Use Raypass for autofill**, or go to the
    system's *Passwords & accounts* → *Autofill service* and choose **Raypass**.
 
+## Importing from other managers
+
+Export from your old manager, then in Raypass open **Settings → Import**, leave **From** on
+*Detect automatically* (or pick the manager) and choose the file.
+
+**Proton Pass**: in Proton Pass open **Settings → Export**, choose **JSON** (a `.zip`, keeps
+extra fields, folders and favourites) or **CSV**, and turn **encryption off** (Raypass can't
+read PGP-encrypted exports). Enter your Proton password when asked and save the file. In Raypass,
+**Settings → Import → Choose file…** and pick the `.zip` or `.csv` as it is (no need to unzip).
+Aliases come in as logins with the alias address; passkeys and items in Proton's trash are not
+imported, and Raypass tells you how many.
+
+- **Bitwarden**: Tools → Export vault → `.json` or `.csv` (not the encrypted JSON).
+- **Chrome, Brave, Edge**: Settings → Passwords (Password Manager) → Export passwords (`.csv`).
+- **Firefox**: about:logins → ⋯ menu → Export Passwords (`.csv`).
+- **1Password**: File → Export → your account → CSV.
+- **KeePassXC**: Database → Export → CSV File.
+- **LastPass**: Advanced options (or Account → Fix a problem yourself) → Export → `.csv`.
+
+An export holds every password in plain text: **delete the export file** (and empty the
+system trash) once the import is done.
+
 ## Use it from a terminal or an agent
 
 Every operation is a Sol action:
@@ -136,6 +159,7 @@ sol do raypass.totp --id 3fa91c20d4e5f601
 sol do raypass.match --url https://github.com/login
 sol do raypass.generate --mode words --words 6
 sol do raypass.import --args '{"data": "…file contents…"}'
+base64 -w0 export.zip | jq -Rs '{data: ., encoding: "base64"}' | sol do raypass.import --args -
 sol do raypass.export --format encrypted --password '…'
 sol do raypass.purge --all_trash --dry-run            # what would go, changing nothing
 sol do --help raypass                                 # every action and its arguments

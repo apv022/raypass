@@ -20,7 +20,8 @@ the bytes between the person's devices; Raypass makes sure Sol only ever carries
 - Health report: weak, reused, and old passwords; items with a TOTP-able site but no TOTP is out
   of scope (no network)
 - Import: Bitwarden JSON (unencrypted), Bitwarden CSV, Chrome/Edge/Brave CSV, Firefox CSV,
-  1Password CSV, KeePass(XC) CSV, LastPass CSV, Raypass JSON. Export: Raypass JSON, CSV, and an
+  1Password CSV, KeePass(XC) CSV, LastPass CSV, Proton Pass JSON (the zip or its data.json,
+  unencrypted) and CSV, Raypass JSON. Export: Raypass JSON, CSV, and an
   encrypted Raypass export (password-protected, same crypto as the vault)
 - Autofill: the browser extension on desktop (Chrome, Chromium, Brave, Edge, Firefox) and an
   Android AutofillService
@@ -208,7 +209,7 @@ locked. Secrets are only in outputs of actions marked **reveals**; those are `ap
 | `raypass.folders` | read, vault | – | `[{"name","count"}]` |
 | `raypass.health` | read, vault | – | `{"weak":[ids],"reused":[[ids]],"old":[ids],"score"}` (no secrets) |
 | `raypass.export` | read, vault, **reveals** | `format` (`json`,`csv`,`encrypted`), `password` (for encrypted) | `{"data","filename"}` |
-| `raypass.import` | write, vault, agents | `format` (`auto`,`bitwarden_json`,`bitwarden_csv`,`chrome_csv`,`firefox_csv`,`1password_csv`,`keepass_csv`,`lastpass_csv`,`raypass_json`,`raypass_encrypted`), `data`, `password?` | `{"imported": n, "skipped": n, "format"}` (`format` is the detected one; exact duplicates of items already in the vault, and Raypass JSON ids already present, are skipped) |
+| `raypass.import` | write, vault, agents | `format` (`auto`,`bitwarden_json`,`bitwarden_csv`,`chrome_csv`,`firefox_csv`,`1password_csv`,`keepass_csv`,`lastpass_csv`,`protonpass_json`,`protonpass_csv`,`raypass_json`,`raypass_encrypted`), `data`, `encoding?` (`text` default, `base64` for binary files such as a zip), `password?` | `{"imported": n, "skipped": n, "format", "notes": [..]}` (`format` is the detected one; exact duplicates of items already in the vault, and Raypass JSON ids already present, are skipped; `notes` says what the file held that could not be imported, e.g. "3 passkeys were not imported", `[]` when nothing) |
 | `raypass.settings` | write, vault, agents | `auto_lock?`, `clip_clear?` | the settings |
 | `raypass.recover` | write, vault, agents | `password` (the orphaned vault's master password), `keyring?` (one of `orphaned_keyrings`) | `{"recovered": n, "skipped": n}`: the orphaned vault's entries are decrypted with its own key and its live items re-added here with new ids; exact duplicates of live items are skipped, so running it twice adds nothing. Wrong password: `unauthorized` (counts toward the unlock backoff); no such orphaned vault: `not_found` |
 
@@ -236,6 +237,31 @@ Notes fixed by the Go implementation (the table above is authoritative for shape
   so cards, identities and wallets are written as notes with their fields as `name: value` lines
   in the `fields` column, and a login's extra URLs as `url: …` fields. Nothing is lost.
 - Exports contain the items not in the trash.
+- Proton Pass import (format from Proton's own exporter, ProtonMail/WebClients
+  `packages/pass/lib/export`): `protonpass_json` takes `Proton Pass/data.json` as text or the
+  whole export zip (`encoding: base64`). Zip limits: at most 20 000 entries, and only data.json
+  is decompressed, capped at 64 MiB whatever the headers claim (attachments are not read). An
+  encrypted export (an armored PGP message, a zip holding `Proton Pass/data.pgp`, or
+  `"encrypted": true`) is `bad_request` "Proton Pass encrypted exports aren't supported: export
+  again with encryption turned off" (no OpenPGP in the stdlib). `auto` detects the zip magic
+  `PK\x03\x04`, PGP armor, a JSON object with `vaults`, and the CSV header
+  (`type,name,url,[autofillUrls,]email,username,password,note,totp,createTime,modifyTime,vault`).
+  Mapping: vault name → folder (Proton folders inside it become `Vault/Folder/Sub`; a `/` in a
+  name becomes `-`); `pinned` → `fav`; login → login with `user` = `itemUsername`, else
+  `itemEmail` (both and different: the email also as field "Email"), `urls` from `autofillUrls`
+  (modes Default, Exact, StartWith, ExactPath) or `urls`; Never/Pattern/RegEx URLs become a
+  text field "URL (not autofilled)"; note → note; creditCard → card (`expirationDate`
+  `YYYY-MM` → `MM/YY`, `cardType` 2/3/4 → Visa/Mastercard/American Express, PIN as hidden field);
+  identity → identity (first+middle / last, else `fullName` split at the last word; address
+  parts joined; other non-empty values and all extra details/sections as fields, SSN, passport
+  and licence numbers hidden); alias → login with `user` = the alias address and a note saying
+  it is a Proton Pass alias; sshKey, wifi, custom → note with their values as fields (private
+  key and Wi-Fi password hidden). `extraFields` → fields (hidden stays hidden; timestamp as its
+  text; a totp field becomes the login's TOTP when it has none, else a hidden field). Trashed
+  items (`state` 2) are not imported (Proton's trash is for things you deleted) and are counted
+  in `notes`, as are passkeys (they can't leave the authenticator's format) and file
+  attachments. Unknown item types are counted in `skipped`. CSV exports carry no extra fields,
+  pins or trash; a card's or identity's `note` cell is the JSON of its content.
 - CSV export defuses spreadsheet formulas in the columns a web page can influence (through
   `save_login`) or a hostile import can carry: `folder`, `name`, `login_uri` and `login_username`
   get a leading `'` when they start with `=`, `+`, `-`, `@`, tab or CR (after any `'`s).
