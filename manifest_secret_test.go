@@ -20,7 +20,7 @@ func TestManifestMarksSecrets(t *testing.T) {
 		"raypass.setup":           {"password"},
 		"raypass.unlock":          {"password"},
 		"raypass.change_password": {"old", "new"},
-		"raypass.recover":         {"password"},
+		"raypass.recover":         {"password", "keyring"},
 		"raypass.export":          {"password"},
 		"raypass.import":          {"data", "password"},
 		"raypass.save_login":      {"pass"},

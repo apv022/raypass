@@ -214,7 +214,9 @@ behind a proxy like Sol's.
   every password, seed, key, card number, note and custom field argument `"secret": true`, and
   every action that returns a secret `output_secret`. Sol v0.2.0-beta.3 and later (apv022/sol#4)
   then keeps those only in memory while an agent's call waits for your approval, and never
-  writes an approved action's output to disk. Older Sol versions ignore the marks and store the
+  writes an approved action's output to disk. Because those values live only in memory, an
+  approval with secret arguments that is still open when Sol restarts expires: the agent has to
+  make the call again. Older Sol versions ignore the marks (installing still works) and store the
   call's arguments and output in `inbox.json` in plain text.
 - **Only http and https pages get domain matching.** Matching by registrable domain uses a
   short embedded list of multi-part and hosting suffixes (`urlmatch/suffixes.txt`), not the
