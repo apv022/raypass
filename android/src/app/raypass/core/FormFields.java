@@ -115,7 +115,10 @@ public final class FormFields {
         if (has(words, "otp", "one-time", "2fa", "totp", "verification code", "auth code", "authcode", "mfa")) return Kind.OTP;
         if (cls == CLASS_TEXT && (var == TEXT_PASSWORD || var == TEXT_VISIBLE_PASSWORD || var == TEXT_WEB_PASSWORD)) return Kind.PASSWORD;
         if (cls == CLASS_NUMBER && var == NUMBER_PASSWORD) return Kind.PASSWORD;
-        if (has(words, "search", "captcha", "coupon", "promo", "zip", "postal", "phone")) return Kind.NONE;
+        if (has(words, "search", "captcha", "coupon", "promo", "zip", "postal")) return Kind.NONE;
+        // A phone field is not a username, unless it also takes one: X's first sign-in step asks
+        // for "Phone, email, or username".
+        if (has(words, "phone") && !has(words, "user", "email", "e-mail", "login")) return Kind.NONE;
         if (has(words, "password", "passwd", "passcode", "pwd", "pass_", "kennwort", "contraseña", "mot de passe", "mot_de_passe", "senha", "parola")) {
             if (has(words, "new", "confirm", "repeat", "again", "retype")) return Kind.NEW_PASSWORD;
             return Kind.PASSWORD;

@@ -415,6 +415,29 @@ public final class Vault {
         return out;
     }
 
+    /** Live (not trashed) logins, favourites first, then by name: what the autofill picker lists. */
+    public synchronized List<Item> logins() { return list("", Item.LOGIN, false, false); }
+
+    /**
+     * Links a login to an app or site the person picked it for ("Remember for X" in the autofill
+     * picker): adds the canonical url to the login's urls, so the next fill there is automatic.
+     * Empty ops when one of its URLs already matches url exactly (same host or app).
+     */
+    public synchronized List<MapOp> rememberUrl(String id, String url, long now) throws BadInput {
+        Item it = get(id);
+        if (it == null || !Item.LOGIN.equals(it.type) || it.trashed() != 0) throw new BadInput("no such login");
+        if (UrlMatch.parse(url) == null) throw new BadInput("url is not a URL");
+        List<Object> urls = new ArrayList<>();
+        for (String u : it.urls()) {
+            if (UrlMatch.rank(u, url) == 0) return new ArrayList<>();
+            urls.add(u);
+        }
+        urls.add(UrlMatch.canonical(url));
+        Map<String, Object> in = new LinkedHashMap<>();
+        in.put("urls", urls);
+        return update(id, in, now);
+    }
+
     /**
      * raypass.save_login: updates the pass of an existing login with the same user and a matching
      * URL (history kept), else adds a login named after the host. out[0] = id, out[1] = "true"

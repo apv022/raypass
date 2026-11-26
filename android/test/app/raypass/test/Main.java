@@ -10,6 +10,7 @@ public final class Main {
         TotpTest.register();
         UrlMatchTest.register(root);
         VaultTest.register();
+        AutofillPickTest.register();
         FormFieldsTest.register();
         SseTest.register();
         PosSetTest.register();
