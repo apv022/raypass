@@ -45,6 +45,11 @@
         <activity android:name=".AutofillAuthActivity" android:exported="false" android:excludeFromRecents="true"
             android:theme="@style/Theme.Raypass.Dialog" android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" />
+        <!-- The autofill picker ("Search Raypass"): opened only through the autofill framework's
+             authentication intent, never by other apps. -->
+        <activity android:name=".AutofillPickActivity" android:exported="false" android:excludeFromRecents="true"
+            android:theme="@style/Theme.Raypass.Dialog" android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" />
         <service android:name=".RaypassAutofillService" android:exported="true" android:label="@string/app_name"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE">
             <intent-filter>

@@ -11,6 +11,7 @@ import app.raypass.core.Clock;
 import app.raypass.core.Crypto;
 import app.raypass.core.Json;
 import app.raypass.core.MapOp;
+import app.raypass.core.RecentFills;
 import app.raypass.core.Session;
 import app.raypass.core.Vault;
 
@@ -446,6 +447,7 @@ final class Repo {
         session.lock();
         main.removeCallbacks(autoLock);
         expirePendingSaves(Long.MAX_VALUE);
+        RecentFills.clear();
         changed();
     }
 

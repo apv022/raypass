@@ -12,8 +12,10 @@ import android.widget.Toast;
 
 /**
  * The small dialog autofill opens while Raypass is locked: unlock (password or biometrics), then
- * either hand the matching datasets back to the autofill framework (mode "fill") or finish a save
- * that was waiting for the unlock (mode "save", the login kept in memory under a token).
+ * either hand the matching datasets back to the autofill framework (mode "fill": a one-time-code
+ * screen on its own; login screens use {@link AutofillPickActivity}), fill a one-time code (mode
+ * "otp"), or finish a save that was waiting for the unlock (mode "save", the login kept in memory
+ * under a token).
  */
 public class AutofillAuthActivity extends BaseActivity {
     @Override
@@ -67,7 +69,7 @@ public class AutofillAuthActivity extends BaseActivity {
         FillResponse r = null;
         if (st != null && repo.vault() != null) {
             AutofillParser p = new AutofillParser(st);
-            if (p.url != null) r = RaypassAutofillService.response(this, p, repo.vault());
+            if (p.url != null) r = RaypassAutofillService.response(this, p, repo.vault(), getIntent().getBundleExtra(AutofillManager.EXTRA_CLIENT_STATE));
         }
         if (r == null) {
             Toast.makeText(this, "No saved login for this app or site", Toast.LENGTH_SHORT).show();
