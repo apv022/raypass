@@ -2,7 +2,7 @@
 // (raypass.generate, health, settings, change_password, import, export, lock); the generator's
 // options are a UI preference kept in localStorage, its output is kept only in memory.
 import { html, render, raw } from '/sol.js';
-import { healthLabel, durationLabel, isEncryptedExport, exportName, typeOf, scoreOf } from '/lib.js';
+import { healthLabel, durationLabel, isEncryptedExport, isBinaryImport, bytesToBase64, importSummary, exportName, typeOf, scoreOf } from '/lib.js';
 import { svg } from '/icons.js';
 import { state, hooks, rp, act, fail, copy, confirmBox, askPassword, prefs, lockNow } from '/core.js';
 import { meterHtml, meter, pwField, wireReveal } from '/gate.js';
@@ -173,9 +173,9 @@ function drawSettings(focus) {
         <label class="opt"><span class="opt-text">From</span><select id="imp-format">
           <option value="auto">Detect automatically</option><option value="bitwarden_json">Bitwarden (JSON)</option><option value="bitwarden_csv">Bitwarden (CSV)</option>
           <option value="chrome_csv">Chrome, Edge, Brave (CSV)</option><option value="firefox_csv">Firefox (CSV)</option><option value="1password_csv">1Password (CSV)</option>
-          <option value="keepass_csv">KeePass, KeePassXC (CSV)</option><option value="lastpass_csv">LastPass (CSV)</option><option value="raypass_json">Raypass (JSON)</option><option value="raypass_encrypted">Raypass (encrypted)</option></select></label>
-        <div class="opt"><span class="opt-text">File<small id="imp-name">JSON or CSV exported from your old password manager</small></span><button type="button" data-s="pick"><sol-icon name="upload"></sol-icon>Choose file…</button></div>
-        <input type="file" id="imp-file" accept=".json,.csv,.txt,application/json,text/csv" hidden>
+          <option value="keepass_csv">KeePass, KeePassXC (CSV)</option><option value="lastpass_csv">LastPass (CSV)</option><option value="protonpass_json">Proton Pass (.zip or .csv)</option><option value="raypass_json">Raypass (JSON)</option><option value="raypass_encrypted">Raypass (encrypted)</option></select></label>
+        <div class="opt"><span class="opt-text">File<small id="imp-name">JSON, CSV or zip exported from your old password manager</small></span><button type="button" data-s="pick"><sol-icon name="upload"></sol-icon>Choose file…</button></div>
+        <input type="file" id="imp-file" accept=".json,.csv,.txt,.zip,application/json,text/csv,application/zip" hidden>
       </div>
       <h3 class="group-title">Export</h3>
       <div class="group">
@@ -229,9 +229,14 @@ async function doExport() {
 }
 
 async function doImport(file) {
-  const data = await file.text();
+  // Binary files (Proton Pass's zip) go as base64; text formats as text.
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const binary = isBinaryImport(bytes);
+  const data = binary ? bytesToBase64(bytes) : new TextDecoder().decode(bytes);
   let format = $('imp-format').value;
-  const args = { format, data };
+  // One picker entry for both Proton Pass files: a text file that isn't JSON or PGP is the CSV.
+  if (format === 'protonpass_json' && !binary && !data.trimStart().startsWith('{') && !data.trimStart().startsWith('-----BEGIN PGP')) format = 'protonpass_csv';
+  const args = binary ? { format, data, encoding: 'base64' } : { format, data };
   if (format === 'raypass_encrypted' || (format === 'auto' && isEncryptedExport(data))) {
     const pw = await askPassword('Encrypted export', `Enter the password of ${file.name}.`, 'Import');
     if (pw === null) return;
@@ -239,7 +244,7 @@ async function doImport(file) {
   }
   try {
     const r = await rp('import', args);
-    hooks.toast(`Imported ${r.imported} item${r.imported === 1 ? '' : 's'}${r.skipped ? `, skipped ${r.skipped}` : ''}`);
+    hooks.toast(importSummary(r));
     await hooks.refresh();
   } catch (e) { fail(e); }
 }

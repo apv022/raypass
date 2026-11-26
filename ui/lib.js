@@ -378,6 +378,32 @@ export function clipDecision({ readable, current, ours, focused }) {
 
 // ---------- import / export ----------
 
+/**
+ * Whether a picked file's bytes must go to raypass.import as base64 (encoding "base64") rather
+ * than text: a zip (PK\x03\x04, such as Proton Pass's export), any file with a NUL byte in its
+ * first 4 KiB, or bytes that are not UTF-8. Text formats (JSON, CSV) stay text.
+ */
+export function isBinaryImport(bytes) {
+  if (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) return true;
+  if (bytes.subarray(0, 4096).includes(0)) return true;
+  try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); return false; } catch { return true; }
+}
+
+/** Base64 of bytes, in chunks so a large file doesn't overflow the argument limit. */
+export function bytesToBase64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/** The toast after an import: counts, then what could not be imported (r.notes). */
+export function importSummary(r) {
+  const n = r.imported ?? 0;
+  let s = `Imported ${n} item${n === 1 ? '' : 's'}${r.skipped ? `, skipped ${r.skipped}` : ''}`;
+  if (Array.isArray(r.notes) && r.notes.length) s += `. ${r.notes.join('. ')}.`;
+  return s;
+}
+
 /** Guesses whether a file the person picked is an encrypted Raypass export (it needs a password). */
 export function isEncryptedExport(text) {
   try { const j = JSON.parse(text); return !!j && typeof j === 'object' && j.raypass_export === 1 && typeof j.data === 'string'; } catch { return false; }

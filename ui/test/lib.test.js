@@ -184,3 +184,21 @@ test('type metadata', () => {
   assert.equal(L.typeOf('nope').id, 'login');
   for (const t of L.TYPES) assert.ok(Array.isArray(L.TYPE_FIELDS[t.id]));
 });
+
+test('binary import files go as base64', () => {
+  const enc = new TextEncoder();
+  assert.ok(L.isBinaryImport(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2])));
+  assert.ok(L.isBinaryImport(new Uint8Array([0x41, 0, 0x42])));
+  assert.ok(L.isBinaryImport(new Uint8Array([0xff, 0xfe, 0xfd])));
+  assert.ok(!L.isBinaryImport(enc.encode('type,name,url\nlogin,é,https://a\n')));
+  assert.ok(!L.isBinaryImport(enc.encode('{"vaults":{}}')));
+  assert.equal(L.bytesToBase64(enc.encode('hello')), 'aGVsbG8=');
+  const big = new Uint8Array(100000).map((_, i) => i & 0xff);
+  assert.equal(atob(L.bytesToBase64(big)).length, big.length);
+});
+
+test('import summary lists the notes', () => {
+  assert.equal(L.importSummary({ imported: 1, skipped: 0, notes: [] }), 'Imported 1 item');
+  assert.equal(L.importSummary({ imported: 7, skipped: 1, notes: ['2 passkeys were not imported'] }),
+    'Imported 7 items, skipped 1. 2 passkeys were not imported.');
+});
