@@ -218,7 +218,7 @@ public class AutofillPickActivity extends BaseActivity {
             Toast.makeText(this, "This login has nothing to fill here", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (remember.isChecked() && !v.match(url).contains(it)) {
+        if (remember.isChecked() && !containsId(v.match(url), it.id)) {
             try {
                 repo.commit(v.rememberUrl(it.id, url, System.currentTimeMillis()));
             } catch (Exception e) {
