@@ -2,6 +2,7 @@ package raypass
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -868,6 +869,7 @@ func (a *App) actImport(ctx context.Context, c sol.Call, st *vault.State) (any, 
 	var in struct {
 		Format   string `json:"format"`
 		Data     string `json:"data"`
+		Encoding string `json:"encoding"` // "text" (default) or "base64", for binary files such as zips
 		Password string `json:"password"`
 	}
 	if err := decode(c, &in); err != nil {
@@ -876,7 +878,20 @@ func (a *App) actImport(ctx context.Context, c sol.Call, st *vault.State) (any, 
 	if in.Format == "" {
 		in.Format = port.Auto
 	}
-	res, err := port.Import(in.Format, []byte(in.Data), in.Password, a.cfg.MinIter)
+	data := []byte(in.Data)
+	switch in.Encoding {
+	case "", "text":
+	case "base64":
+		b, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(in.Data), ""))
+		if err != nil {
+			return nil, sol.Errorf("bad_request", "data is not valid base64")
+		}
+		data = b
+	default:
+		return nil, sol.Errorf("bad_request", "encoding must be text or base64")
+	}
+	res, err := port.Import(in.Format, data, in.Password, a.cfg.MinIter)
+	vault.Wipe(data)
 	if err != nil {
 		return nil, inputErr(err)
 	}
@@ -912,7 +927,11 @@ func (a *App) actImport(ctx context.Context, c sol.Call, st *vault.State) (any, 
 		ops = append(ops, iops...)
 		imported++
 	}
-	out := map[string]any{"imported": imported, "skipped": skipped, "format": res.Format}
+	notes := res.Notes
+	if notes == nil {
+		notes = []string{}
+	}
+	out := map[string]any{"imported": imported, "skipped": skipped, "format": res.Format, "notes": notes}
 	if c.DryRun {
 		return dry(out), nil
 	}
