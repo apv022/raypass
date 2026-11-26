@@ -71,8 +71,15 @@ cp "$DIST/stage/ext/raypass-extension-chrome.zip" "$DIST/raypass-extension-$V-ch
 cp "$DIST/stage/ext/raypass-extension-firefox.zip" "$DIST/raypass-extension-$V-firefox.zip"
 
 if [ -z "${SKIP_ANDROID:-}" ]; then
+  # versionCode must grow with every release, pre-releases included: X.Y.Z-anything.N gets N
+  # (1-98) in the last two digits, a final X.Y.Z gets 99, so 0.2.0-beta.3 < 0.2.0 < 0.2.1-beta.1.
   IFS=. read -r ma mi pa <<<"${V%%-*}"
-  export RAYPASS_VERSION=$V RAYPASS_VERSION_CODE=$((ma * 10000 + mi * 100 + pa))
+  n=99
+  if [[ $V == *-* ]]; then
+    n=${V##*.}
+    [[ $n =~ ^[0-9]+$ && $n -ge 1 && $n -le 98 ]] || { echo "pre-release $V must end in .N (1-98) for the Android versionCode" >&2; exit 2; }
+  fi
+  export RAYPASS_VERSION=$V RAYPASS_VERSION_CODE=$((ma * 1000000 + mi * 10000 + pa * 100 + n))
   if [ -n "${RAYPASS_KEYSTORE:-}" ]; then
     RELEASE=1 android/build.sh
     cp android/build/raypass-release.apk "$DIST/raypass-$V.apk"
