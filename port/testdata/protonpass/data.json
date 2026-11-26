@@ -1,0 +1,171 @@
+{
+  "version": "1.31.2",
+  "userId": "TEST_USER_ID==",
+  "encrypted": false,
+  "vaults": {
+    "A_SHARE_PERSONAL==": {
+      "name": "Personal",
+      "description": "Personal vault",
+      "display": {"color": 0, "icon": 0},
+      "folders": [
+        {"folderId": "F_CLIENTS==", "parentFolderId": null, "name": "Clients"},
+        {"folderId": "F_NESTED==", "parentFolderId": "F_CLIENTS==", "name": "Nested"}
+      ],
+      "items": [
+        {
+          "itemId": "I_LOGIN==", "shareId": "A_SHARE_PERSONAL==", "folderId": null,
+          "data": {
+            "metadata": {"name": "Example login", "note": "My login note.", "itemUuid": "e8ee1a0c"},
+            "extraFields": [
+              {"fieldName": "Recovery code", "type": "text", "data": {"content": "RC-1234"}},
+              {"fieldName": "Security answer", "type": "hidden", "data": {"content": "blue"}},
+              {"fieldName": "Backup 2FA", "type": "totp", "data": {"totpUri": "JBSWY3DPEHPK3PXQ"}},
+              {"fieldName": "Renewal", "type": "timestamp", "data": {"timestamp": "2027-01-31"}}
+            ],
+            "type": "login",
+            "content": {
+              "itemEmail": "john@example.com",
+              "itemUsername": "john",
+              "password": "correct horse battery",
+              "urls": ["https://example.com/", "https://login.example.com/"],
+              "autofillUrls": [
+                {"url": "https://example.com/", "mode": 0},
+                {"url": "https://login.example.com/", "mode": 1},
+                {"url": "https://never.example.com/", "mode": 2}
+              ],
+              "totpUri": "otpauth://totp/Example:john?issuer=Example&secret=GEZDGNBVGY3TQOJQ&algorithm=SHA1&digits=6&period=30",
+              "passkeys": []
+            }
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1707735320, "modifyTime": 1707735349, "pinned": true
+        },
+        {
+          "itemId": "I_EMAILONLY==", "shareId": "A_SHARE_PERSONAL==", "folderId": "F_NESTED==",
+          "data": {
+            "metadata": {"name": "Email only login", "note": "", "itemUuid": "aa11bb22"},
+            "extraFields": [
+              {"fieldName": "Second code", "type": "totp", "data": {"totpUri": "otpauth://totp/X?secret=MFRGGZDFMZTWQ2LK"}}
+            ],
+            "type": "login",
+            "content": {
+              "itemEmail": "jane@example.org", "itemUsername": "", "password": "pw2",
+              "urls": ["https://shop.example.org/"], "totpUri": "",
+              "passkeys": [
+                {"keyId": "K1", "content": "AAAA", "domain": "shop.example.org", "rpId": "shop.example.org", "rpName": "Shop", "userName": "jane", "userDisplayName": "Jane", "userId": "dQ==", "createTime": 1714982805, "note": "", "credentialId": "Yw==", "userHandle": "dQ=="},
+                {"keyId": "K2", "content": "BBBB", "domain": "shop.example.org", "rpId": "shop.example.org", "rpName": "Shop", "userName": "jane2", "userDisplayName": "Jane", "userId": "dg==", "createTime": 1714982806, "note": "", "credentialId": "Yg==", "userHandle": "dg=="}
+              ]
+            }
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1714982805, "modifyTime": 1716538291, "pinned": false,
+          "files": ["attachment-1.pdf"]
+        },
+        {
+          "itemId": "I_NOTE==", "shareId": "A_SHARE_PERSONAL==", "folderId": "F_CLIENTS==",
+          "data": {
+            "metadata": {"name": "Wi-Fi at the office", "note": "Ask reception for the guest code.", "itemUuid": "ad618070"},
+            "extraFields": [
+              {"fieldName": "Door code", "type": "hidden", "data": {"content": "4321"}}
+            ],
+            "type": "note",
+            "content": {}
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1689182908, "modifyTime": 1689182908, "pinned": false
+        },
+        {
+          "itemId": "I_TRASHED==", "shareId": "A_SHARE_PERSONAL==", "folderId": null,
+          "data": {
+            "metadata": {"name": "Deleted note", "note": "old", "itemUuid": "ad618071"},
+            "extraFields": [], "type": "note", "content": {}
+          },
+          "state": 2, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1689182908, "modifyTime": 1689182999, "pinned": false
+        },
+        {
+          "itemId": "I_ALIAS==", "shareId": "A_SHARE_PERSONAL==", "folderId": null,
+          "data": {
+            "metadata": {"name": "Newsletter alias", "note": "for newsletters", "itemUuid": "576f14fa"},
+            "extraFields": [], "type": "alias", "content": {}
+          },
+          "state": 1, "aliasEmail": "news.lilac123@passinbox.com", "contentFormatVersion": 7,
+          "createTime": 1725708208, "modifyTime": 1725708208, "pinned": false
+        }
+      ]
+    },
+    "B_SHARE_FINANCE==": {
+      "name": "Finance",
+      "description": "",
+      "display": {"color": 1, "icon": 2},
+      "items": [
+        {
+          "itemId": "I_CARD==", "shareId": "B_SHARE_FINANCE==",
+          "data": {
+            "metadata": {"name": "Visa card", "note": "Main card", "itemUuid": "d8f45370"},
+            "extraFields": [
+              {"fieldName": "Bank phone", "type": "text", "data": {"content": "+1 555 0100"}}
+            ],
+            "type": "creditCard",
+            "content": {
+              "cardholderName": "John Doe", "cardType": 2, "number": "4111111111111111",
+              "verificationNumber": "123", "expirationDate": "2029-07", "pin": "9876"
+            }
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1691001643, "modifyTime": 1691001643, "pinned": true
+        },
+        {
+          "itemId": "I_IDENTITY==", "shareId": "B_SHARE_FINANCE==",
+          "data": {
+            "metadata": {"name": "Me", "note": "identity note", "itemUuid": "c2e52768"},
+            "extraFields": [
+              {"fieldName": "Loyalty number", "type": "text", "data": {"content": "L-77"}}
+            ],
+            "type": "identity",
+            "content": {
+              "fullName": "John Middle Doe", "email": "john@example.com", "phoneNumber": "+1 555 0101",
+              "firstName": "John", "middleName": "Middle", "lastName": "Doe",
+              "birthdate": "1990-01-02", "gender": "",
+              "extraPersonalDetails": [{"fieldName": "Nickname", "type": "text", "data": {"content": "JD"}}],
+              "organization": "", "streetAddress": "23 Street", "zipOrPostalCode": "10001", "city": "New York",
+              "stateOrProvince": "NY", "countryOrRegion": "US", "floor": "12th Floor", "county": "",
+              "extraAddressDetails": [],
+              "socialSecurityNumber": "078-05-1120", "passportNumber": "", "licenseNumber": "",
+              "website": "", "xHandle": "@johnd", "secondPhoneNumber": "", "linkedin": "", "reddit": "",
+              "facebook": "", "yahoo": "", "instagram": "",
+              "extraContactDetails": [{"fieldName": "Signal", "type": "hidden", "data": {"content": "+1 555 0199"}}],
+              "company": "Example Corp", "jobTitle": "Engineer", "personalWebsite": "", "workPhoneNumber": "",
+              "workEmail": "", "extraWorkDetails": [],
+              "extraSections": [
+                {"sectionName": "Medical", "sectionFields": [{"fieldName": "Blood type", "type": "text", "data": {"content": "O+"}}]}
+              ]
+            }
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1725707298, "modifyTime": 1725707298, "pinned": false
+        },
+        {
+          "itemId": "I_SSH==", "shareId": "B_SHARE_FINANCE==",
+          "data": {
+            "metadata": {"name": "Server key", "note": "", "itemUuid": "00000002"},
+            "extraFields": [{"fieldName": "Host", "type": "text", "data": {"content": "example.com"}}],
+            "type": "sshKey",
+            "content": {"privateKey": "-----BEGIN OPENSSH PRIVATE KEY-----\nTESTKEY\n-----END OPENSSH PRIVATE KEY-----\n", "publicKey": "ssh-ed25519 AAAATEST", "sections": []}
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 7,
+          "createTime": 1777041700, "modifyTime": 1777041700, "pinned": false
+        },
+        {
+          "itemId": "I_FUTURE==", "shareId": "B_SHARE_FINANCE==",
+          "data": {
+            "metadata": {"name": "A future type", "note": "", "itemUuid": "00000003"},
+            "extraFields": [], "type": "hologram", "content": {}
+          },
+          "state": 1, "aliasEmail": null, "contentFormatVersion": 99,
+          "createTime": 1777041700, "modifyTime": 1777041700, "pinned": false
+        }
+      ]
+    }
+  }
+}

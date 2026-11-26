@@ -34,7 +34,7 @@ import (
 // Zip limits. Only data.json is ever decompressed (attachments are not imported), so the bytes
 // decompressed are capped by maxProtonJSON whatever sizes the zip's headers claim.
 const (
-	maxZipEntries = 100000
+	maxZipEntries = 20000
 	maxProtonJSON = 64 << 20
 )
 
