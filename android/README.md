@@ -32,14 +32,23 @@ framework and `javax.crypto` only: no Gradle, no AndroidX, no third-party code.
   entropy computed like the Go app.
 - **Autofill** (`RaypassAutofillService`): finds username/password/one-time-code fields from
   autofill hints, HTML attributes, input types and id/hint words; offers logins matching
-  `androidapp://<package>`, or the web domain reported by a known browser (URL rules and the
-  suffix list `../urlmatch/suffixes.txt` shared with the Go app) (any other app could
-  claim any domain, so only browsers are believed). In a browser only the fields of the focused
-  frame are filled, under that frame's domain, so a cross-site iframe never gets the page's
-  login. A one-time-code field gets the item's TOTP code, computed when you pick it. "Unlock
-  Raypass" when locked; saves new or changed logins (same user and domain updates the password
-  and keeps the old one in history). Raypass's own windows are excluded from other autofill
-  services.
+  `androidapp://<package>`, or the web domain reported by a known browser (URL rules, the
+  suffix list `../urlmatch/suffixes.txt` and the equivalent domains `../urlmatch/equivalent.txt`,
+  e.g. x.com and twitter.com, shared with the Go app) (any other app could claim any domain, so
+  only browsers are believed). In a browser only the fields of the focused frame are filled,
+  under that frame's domain, so a cross-site iframe never gets the page's login. A one-time-code
+  field gets the item's TOTP code, computed when you pick it.
+- **Search Raypass**: every login screen also gets a "Search Raypass" entry ("Unlock Raypass"
+  when locked), which opens a picker of your logins, the likely ones first (a curated table of
+  well-known apps, e.g. X → x.com, and the words of the app's package name; these only order the
+  list, they never fill on their own). Tap one and it fills. "Remember for <app>" (on by
+  default) adds `androidapp://<package>` to that login, so next time the app matches by itself,
+  on every device.
+- **Multi-step sign-ins** (X: username first, password on the next screen): the username
+  screen fills just the username; the password screen lists the login you just used first; and
+  "Save to Raypass?" waits for the password screen and saves both (Android 10+).
+- Saves new or changed logins (same user and domain updates the password and keeps the old one
+  in history). Raypass's own windows are excluded from other autofill services.
 
 ## Build
 
@@ -78,6 +87,31 @@ the Android version) → Autofill service → **Raypass**. Raypass's own Setting
 **Use Raypass for autofill** button that opens that page. Biometric unlock is in the same
 Settings screen, once the vault is unlocked.
 
+## Troubleshooting autofill
+
+- **No Raypass entry at all.** Raypass must be *the* autofill service: Settings → Passwords &
+  accounts (on newer versions: Passwords, passkeys & accounts, or Passwords, passkeys &
+  autofill) → Autofill service (or "Preferred service") → **Raypass**, and turn Google's off
+  (Android 14+ also lists "additional" providers; make Raypass the preferred one). On Samsung: Settings →
+  General management → Passwords and autofill → Autofill service → Raypass (and turn off
+  Samsung Pass for autofill if it is on).
+- **An app shows only "Search Raypass".** The app has no login linked to it yet (a login
+  imported from another manager has the site's web address, e.g. x.com, not the app). Tap
+  **Search Raypass**, pick the login, keep **Remember for <app>** ticked: from then on that app
+  is matched automatically, on every device.
+- **Chrome fills nothing.** Chrome 131+ uses its own autofill unless told otherwise: Chrome →
+  Settings → Autofill services → **Autofill using another service**, then restart Chrome.
+  Firefox and most other browsers use Android's autofill directly.
+- **Nothing happens when tapping an entry / "Unlock Raypass" fails.** Raypass needs Sol
+  installed and set up, and Raypass connected to it (open Raypass: it says so if it is not).
+  Your vault is read from the cache on the phone, so unlocking works offline once it has synced.
+- **The suggestion appears in the dropdown, not above the keyboard.** That is expected: Raypass
+  uses the dropdown under the field, which works with every keyboard; it offers no keyboard
+  (inline) suggestions.
+- **A sign-in over two screens** (username, then password): the username screen offers just the
+  username; the password screen then lists the same login first. If you typed the username
+  yourself, "Save to Raypass?" appears after the password screen with both.
+
 ## Not done yet
 
 - Import and export (the Go app's `raypass.import` / `raypass.export`) are not on the phone;
@@ -85,8 +119,10 @@ Settings screen, once the vault is unlocked.
 - The health report is not shown on the phone.
 - No autofill compatibility mode: Chrome fills through Raypass once "Autofill using another
   service" is chosen in Chrome's settings (Chrome 131+); Firefox and other browsers with native
-  autofill work directly. No inline (keyboard) suggestions; the dropdown is used.
-- No "search the vault" entry in autofill for an app that has no saved login yet.
+  autofill work directly. No inline (keyboard) suggestions; the dropdown is used (inline ones
+  need androidx's Slice format).
+- The app → domain table is not pinned to the apps' signing certificates (they are not
+  verified here), so it only orders the picker; it never fills an app by itself.
 - Not tested on a device or emulator in this environment (none available); it compiles against
   API 34, every API above 26 is guarded by a version check (checked by compiling against the
   API 26 framework), and the logic below the UI is covered by `test.sh`.

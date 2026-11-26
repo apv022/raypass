@@ -348,8 +348,29 @@ with its token, and does the crypto above itself in Java (`javax.crypto`, no thi
   Keystore key that requires user authentication, `BiometricPrompt`), vault list with search,
   item detail with copy and TOTP, add/edit for every type, generator, lock.
 - `AutofillService`: fills logins into apps (match `androidapp://<package>` or the web domain
-  that the autofill structure reports for browsers), offers to save new logins
-  (`SaveInfo`), and an "Open Raypass" dataset when locked (authentication intent).
+  that the autofill structure reports for known browsers; any other app could claim any
+  domain), offers to save new logins (`SaveInfo`).
+- **Picking a login.** Every request with a username or password field also gets a "Search
+  Raypass" dataset ("Unlock Raypass" when locked: unlock first). Its authentication intent opens
+  a picker listing the logins, suggestions first: the login filled here a moment ago, logins
+  matching the URL, logins for the domain a curated table names for the app
+  (`core/AppDomains.java`, e.g. `com.twitter.android` → `x.com`, equivalent domains included),
+  logins whose name or URL holds a word of the package name; then "Show all logins" and a search
+  over every login. The tapped login fills at once (`EXTRA_AUTHENTICATION_RESULT`). "Remember for
+  <app>" (a checkbox, on by default) appends `androidapp://<package>` (or the page's origin in a
+  browser) to that login's `urls`, an ordinary vault update, so the next fill there is an
+  automatic match on every device. The app→domain table never fills by itself: official signing
+  certificates are not pinned, and a sideloaded app can take an official package name, so the
+  link from an app to a login is always the person's explicit choice.
+- **Multi-step sign-ins** (username on one screen, password on the next): a username-only
+  screen gets datasets that fill just the username. A password-only screen in the same app or
+  page within 5 minutes of a fill (from the dropdown, seen through the fill event history, or
+  from the picker) lists that login first. A username-only screen sets `FLAG_DELAY_SAVE` (API
+  29+) and carries its username field in the response's client state, so the password screen's
+  `SaveInfo` includes it and "Save to Raypass?" offers user and password together.
+- Presentations are plain `RemoteViews` in the autofill dropdown, which works with every
+  keyboard. No inline (keyboard strip) suggestions: they need a `Slice` in the private format
+  androidx's `InlineSuggestionUi` writes, which this build cannot use (no AndroidX).
   No insecure-page warning on Android: browsers report the page's domain to an autofill
   service (`ViewStructure.getWebDomain`) but its scheme only on Android 9+ and not from every
   browser (`getWebScheme`, else taken as `https`), so an http page cannot be told from https
