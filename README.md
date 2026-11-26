@@ -186,9 +186,12 @@ behind a proxy like Sol's.
 - **Windows uses a TCP socket.** On Windows, Sol serves apps on a loopback TCP port instead
   of a Unix socket. Another local process that finds the port can talk to Raypass directly,
   without going through Sol's sign-in. This is Sol's design on Windows, not Raypass's.
-- **Agent arguments are stored in plain text.** When an agent's call waits for your approval,
-  Sol's inbox keeps the call's arguments in plain text, and those can include a password the
-  agent wants to save. Keep secrets out of agent calls where you can.
+- **Agent approvals need Sol v0.2.0-beta.3 or later to keep secrets off disk.** `app.json` marks
+  every password, seed, key, card number, note and custom field argument `"secret": true`, and
+  every action that returns a secret `output_secret`. Sol v0.2.0-beta.3 and later (apv022/sol#4)
+  then keeps those only in memory while an agent's call waits for your approval, and never
+  writes an approved action's output to disk. Older Sol versions ignore the marks and store the
+  call's arguments and output in `inbox.json` in plain text.
 - **Only http and https pages get domain matching.** Matching by registrable domain uses a
   short embedded list of multi-part and hosting suffixes (`urlmatch/suffixes.txt`), not the
   full Public Suffix List. Any other scheme needs the same scheme, host and port. The

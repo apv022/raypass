@@ -37,6 +37,11 @@ user, the browser extension through `sol do`) can read secrets: that is the same
 unlocked password manager. Agents (Sol agent keys) must get the person's approval for every
 action that reveals a secret or changes the vault (`"approval": "agents"`). Peers (other
 people) can never call any Raypass action: every handler requires `Sol-Self: 1`.
+`app.json` marks every secret argument `"secret": true` (passwords, the import file, and each
+secret field of `add`, `update` and `save_login`) and every action whose output is a secret
+`output_secret` (`get`, `fill`, `totp`, `export`, `generate`), so while an agent's call waits for
+approval Sol keeps those values in memory only and never writes them to its inbox on disk
+(Sol API.md §8–9, Sol v0.2.0-beta.3 and later). `manifest_secret_test.go` keeps the marks in place.
 
 ## Crypto (the interop contract; Go, Java and tests must agree byte for byte)
 
